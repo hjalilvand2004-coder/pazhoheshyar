@@ -27,10 +27,16 @@ export default function SsoSettings() {
 
   const save = async () => {
     setMsg(''); setErr('')
+    if (s.enabled && !(s.issuer || '').trim() || s.enabled && !(s.client_id || '').trim() || s.enabled && !(s.redirect_uri || '').trim()) {
+      setErr('برای فعال‌سازی، Issuer و Client ID و Redirect URI را کامل کنید.')
+      return
+    }
     try {
       const d = await api('/admin/sso/settings', { method: 'PUT', body: s })
       setS({ ...d, client_secret: '' })
-      setMsg('تنظیمات SSO ذخیره شد.')
+      setMsg(s.enabled
+        ? 'تنظیمات ذخیره و ورود یکپارچه فعال شد؛ دکمه SSO در صفحه ورود نمایش داده می‌شود.'
+        : 'تنظیمات SSO ذخیره شد (ورود یکپارچه غیرفعال است).')
     } catch (e) { setErr(e.message) }
   }
   const test = async () => {
@@ -86,7 +92,17 @@ export default function SsoSettings() {
           <button className="btn secondary" onClick={test}>🔌 تست اتصال به سرور هویت</button>
         </div>
         {testResult && (
-          <div className={testResult.ok ? 'ok-box' : 'error-box'}>{testResult.message}</div>
+          <>
+            <div className={testResult.ok ? 'ok-box' : 'error-box'}>{testResult.message}</div>
+            {testResult.provider && testResult.ok && (
+              <div className="hint" dir="ltr" style={{ textAlign: 'left', fontSize: 12.5 }}>
+                issuer: {testResult.provider.issuer_reported}<br />
+                authorize: {testResult.provider.authorization_endpoint}<br />
+                token: {testResult.provider.token_endpoint}<br />
+                userinfo: {testResult.provider.userinfo_endpoint}
+              </div>
+            )}
+          </>
         )}
         {s.last_test_status && !testResult && <div className="hint">آخرین تست: {s.last_test_status}</div>}
       </div>

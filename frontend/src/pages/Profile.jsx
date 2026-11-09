@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useAuth } from '../auth.jsx'
-import { api } from '../api.js'
+import { api, getToken } from '../api.js'
 
 const toList = (v) => (Array.isArray(v) ? v : (v || '').split('،').map(s => s.trim()).filter(Boolean))
 
@@ -9,8 +9,12 @@ export default function Profile() {
   const [p, setP] = useState(null)
   const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
+  const [sso, setSso] = useState({ enabled: false })
 
-  useEffect(() => { api('/profiles/me').then(setP).catch(e => setErr(e.message)) }, [])
+  useEffect(() => {
+    api('/profiles/me').then(setP).catch(e => setErr(e.message))
+    api('/auth/sso/config').then(setSso).catch(() => {})
+  }, [])
 
   if (!p) return <div className="empty">در حال بارگذاری… {err && <div className="error-box">{err}</div>}</div>
   const isProfessor = hasRole('professor')
@@ -106,6 +110,30 @@ export default function Profile() {
           </div>
         )}
         <button className="btn" style={{ marginTop: 14 }} onClick={save}>ذخیره پروفایل</button>
+      </div>
+
+      <div className="card">
+        <h3>🔗 حساب دانشگاهی (SSO)</h3>
+        {user?.sso_linked ? (
+          <div className="ok-box">
+            حساب شما به هویت مرکزی دانشگاه متصل است. ورود بعدی می‌توانید با دکمه «ورود با حساب دانشگاهی» انجام شود.
+          </div>
+        ) : sso.enabled ? (
+          <>
+            <div className="hint">
+              با اتصال حساب، از این پس می‌توانید با همان نام کاربری/رمز دانشگاهی (Keycloak) وارد پژوهشیار۳۶۰ شوید —
+              بدون رمز جداگانه. هویت شما با <code>issuer + sub</code> قفل می‌شود.
+            </div>
+            <button
+              className="btn secondary" style={{ marginTop: 10 }}
+              onClick={() => window.location.assign(`/api/v1/auth/sso/login?token=${encodeURIComponent(getToken())}`)}
+            >
+              اتصال حساب به ورود یکپارچه دانشگاه
+            </button>
+          </>
+        ) : (
+          <div className="hint">ورود یکپارچه هنوز توسط مدیر سامانه فعال نشده است.</div>
+        )}
       </div>
     </>
   )

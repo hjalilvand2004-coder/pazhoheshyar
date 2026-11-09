@@ -94,6 +94,11 @@ def get_sso(user: User = Depends(require_roles("system_admin")), db: Session = D
 
 @router.put("/sso/settings", summary="ذخیره تنظیمات ورود یکپارچه (Keycloak/OIDC)")
 def put_sso(body: SsoIn, user: User = Depends(require_roles("system_admin")), db: Session = Depends(get_db)):
+    if body.enabled and not (body.issuer.strip() and body.client_id.strip() and body.redirect_uri.strip()):
+        raise HTTPException(
+            status_code=400,
+            detail="برای فعال‌سازی SSO، هر سه مقدار Issuer و Client ID و Redirect URI الزامی است",
+        )
     s = _get_sso(db)
     s.enabled = body.enabled
     s.issuer = body.issuer.strip().rstrip("/")
@@ -109,15 +114,31 @@ def put_sso(body: SsoIn, user: User = Depends(require_roles("system_admin")), db
     return get_sso(user, db)
 
 
-@router.post("/sso/test", summary="تست اتصال به سرور هویت")
+@router.post("/sso/test", summary="تست اتصال به سرور هویت (Discovery استاندارد OIDC)")
 def test_sso(user: User = Depends(require_roles("system_admin")), db: Session = Depends(get_db)):
     s = _get_sso(db)
+    result: dict = {"ok": False, "message": "", "provider": None}
     try:
         pc = oidc.get_provider_config(s.issuer)
-        ok = bool(pc.get("authorization_endpoint") and pc.get("token_endpoint"))
-        msg = "اتصال موفق: تنظیمات OIDC سرور هویت خوانده شد." if ok else "پاسخ سرور کامل نیست."
+        missing = [k for k in ("authorization_endpoint", "token_endpoint", "userinfo_endpoint") if not pc.get(k)]
+        result["provider"] = {
+            "issuer_reported": pc.get("issuer"),
+            "authorization_endpoint": pc.get("authorization_endpoint"),
+            "token_endpoint": pc.get("token_endpoint"),
+            "userinfo_endpoint": pc.get("userinfo_endpoint"),
+        }
+        issuer_ok = bool(pc.get("issuer")) and pc["issuer"].rstrip("/") == (s.issuer or "").rstrip("/")
+        if missing:
+            msg = f"پاسخ Discovery ناقص است؛ این موارد یافت نشد: {', '.join(missing)}"
+        elif not issuer_ok:
+            msg = f"هشدار: Issuer اعلام‌شده توسط سرور ({pc.get('issuer')}) با مقدار تنظیم‌شده ({s.issuer}) یکسان نیست."
+            result["ok"] = True  # اتصال برقرار است اما پیکربندی باید بازبینی شود
+        else:
+            msg = "اتصال موفق بود؛ Discovery استاندارد OIDC کامل و Issuer منطبق است."
+            result["ok"] = True
     except oidc.SsoError as exc:
-        ok, msg = False, str(exc)
+        msg = str(exc)
     s.last_test_status = msg
+    result["message"] = msg
     db.commit()
-    return {"ok": ok, "message": msg}
+    return result

@@ -8,12 +8,13 @@ uploads/
 *.db
 .secret
 .pytest_cache/
-dist/
-build/
-dist-*/
-build-*/
+/dist/
+/backend/dist/
+/backend/build/
+/dist-*/
+/build-*/
 node_modules/
-frontend/dist/
+# frontend/dist/ ساخته‌شده داخل مخزن نگه داشته می‌شود تا ساخت ویندوز به Node نیاز نداشته باشد
 *.spec.bak
 .DS_Store
 dev.log
