@@ -1,0 +1,15 @@
+services:
+  pazhoheshyar360:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      # - SECRET_KEY=یک-مقدار-ثابت-تصادفی
+      # - SERVICE_TOKEN=توکن-مشترک-سامانه‌های-دانشجو۳۶۰
+    volumes:
+      - pzh_data:/app/backend/data
+      - pzh_uploads:/app/backend/uploads
+volumes:
+  pzh_data:
+  pzh_uploads:
