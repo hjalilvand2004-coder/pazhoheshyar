@@ -82,7 +82,7 @@ echo     %PKG%
 echo     %ROOT%\dist\Pazhoheshyar360-Windows.zip
 echo   این پوشه/zip را به هر ویندوزی ببرید - به پایتون نیازی نیست.
 echo ============================================================
-pause
+if not defined CI pause
 exit /b 0
 
 :npmfail
@@ -95,5 +95,5 @@ echo    [خطا] PyInstaller ناموفق بود.
 :err
 echo.
 echo ساخت بسته متوقف شد. پیام بالا را بررسی کنید.
-pause
+if not defined CI pause
 exit /b 1

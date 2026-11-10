@@ -1,0 +1,91 @@
+name: "Release — ساخت بسته پرتیبل ویندوز"
+
+# تریگر: پوش تگ v* یا اجرای دستی از تب Actions
+# خروجی: zip بسته پرتیبل ویندوز (بدون نیاز به پایتون) در بخش Releases
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Build Windows Portable (exe — no Python needed)
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      PYTHONUTF8: '1'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install backend dependencies
+        shell: pwsh
+        run: python -m pip install -r backend/requirements.txt pytest --quiet
+
+      - name: Run backend tests (sanity — non-blocking)
+        working-directory: backend
+        continue-on-error: true
+        shell: pwsh
+        run: python -m pytest tests -q
+
+      - name: Build portable package (scripts\build_portable.bat)
+        shell: cmd
+        run: call scripts\build_portable.bat
+
+      - name: Smoke test — run the exe for real on :8000
+        shell: pwsh
+        run: |
+          $pkg = "dist\Pazhoheshyar360-Windows"
+          $exe = Join-Path $pkg "pazhoheshyar360-server.exe"
+          if (-not (Test-Path $exe)) { Write-Host "::error::exe not found: $exe"; exit 1 }
+          $proc = Start-Process -FilePath $exe -WorkingDirectory $pkg -PassThru
+          $ok = $false
+          for ($i = 0; $i -lt 45; $i++) {
+            Start-Sleep -Seconds 2
+            if ($proc.HasExited) { Write-Host "Process exited early, code=$($proc.ExitCode)"; break }
+            try {
+              $r = Invoke-WebRequest -Uri "http://localhost:8000/api/v1/services" -UseBasicParsing -TimeoutSec 5
+              if ($r.StatusCode -eq 200) { $ok = $true; break }
+            } catch {}
+          }
+          Get-Process -Name "pazhoheshyar360-server" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          if (-not $ok) { Write-Host "::error::Smoke test failed — no 200 response on :8000"; exit 1 }
+          Write-Host "Smoke test OK: GET /api/v1/services => 200"
+          # داده‌های ناشی از تست دود را از بسته پاک می‌کنیم (zip قبل از این مرحله ساخته شده و دست‌نخورده است)
+          if (Test-Path (Join-Path $pkg "data")) { Remove-Item (Join-Path $pkg "data") -Recurse -Force }
+
+      - name: Rename zip with version tag
+        shell: pwsh
+        run: |
+          $name = "Pazhoheshyar360-Windows.zip"
+          if ("$env:GITHUB_REF_NAME" -like "v*") { $name = "Pazhoheshyar360-Windows-$env:GITHUB_REF_NAME.zip" }
+          Copy-Item "dist\Pazhoheshyar360-Windows.zip" $name -Force
+          "ASSET_NAME=$name" | Add-Content -Path $env:GITHUB_ENV -Encoding utf8
+          Write-Host "Asset: $name"
+
+      - name: Upload artifact (available from Actions tab)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Pazhoheshyar360-Windows-portable
+          path: ${{ env.ASSET_NAME }}
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "پژوهشیار۳۶۰ ${{ github.ref_name }}"
+          body_path: RELEASE-NOTES.md
+          files: ${{ env.ASSET_NAME }}
+          fail_on_unmatched_files: true
