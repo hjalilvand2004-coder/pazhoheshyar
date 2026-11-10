@@ -2,10 +2,27 @@ import React, { useEffect, useState } from 'react'
 import { useAuth } from '../auth.jsx'
 import { api } from '../api.js'
 
+const CLIENT_SNIPPET = `{
+  "pazhoheshyar360": {
+    "name": "پژوهشیار۳۶۰",
+    "confidential": false,
+    "redirect_uris": [
+      "http://آدرس-این-سامانه/sso/callback"
+    ],
+    "post_logout_redirect_uris": [
+      "http://آدرس-این-سامانه/?loggedOut=1"
+    ]
+  }
+}`
+
 const EMPTY = {
-  enabled: false, issuer: '', client_id: 'pajoohesh-yar360', client_secret: '',
-  redirect_uri: window.location.origin + '/sso/callback', scope: 'openid profile email',
-  auto_create_users: false, default_roles: ['student'],
+  enabled: false, issuer: 'http://188.212.96.235:8086', client_id: 'pazhoheshyar360',
+  client_type: 'public', client_secret: '',
+  redirect_uri: window.location.origin + '/sso/callback',
+  post_logout_redirect_uri: window.location.origin + '/?loggedOut=1',
+  button_label: 'ورود با حساب پرتال دانشجویار۳۶۰',
+  scope: 'openid profile email',
+  auto_create_users: true, default_roles: ['student'],
 }
 
 export default function SsoSettings() {
@@ -27,15 +44,19 @@ export default function SsoSettings() {
 
   const save = async () => {
     setMsg(''); setErr('')
-    if (s.enabled && !(s.issuer || '').trim() || s.enabled && !(s.client_id || '').trim() || s.enabled && !(s.redirect_uri || '').trim()) {
+    if (s.enabled && (!(s.issuer || '').trim() || !(s.client_id || '').trim() || !(s.redirect_uri || '').trim())) {
       setErr('برای فعال‌سازی، Issuer و Client ID و Redirect URI را کامل کنید.')
+      return
+    }
+    if (s.enabled && s.client_type === 'confidential' && !s.client_secret && !s.client_secret_set) {
+      setErr('برای کلاینت محرمانه (confidential) مقدار Client Secret الزامی است؛ برای پرتال دانشجویار۳۶۰ نوع public را انتخاب کنید.')
       return
     }
     try {
       const d = await api('/admin/sso/settings', { method: 'PUT', body: s })
       setS({ ...d, client_secret: '' })
       setMsg(s.enabled
-        ? 'تنظیمات ذخیره و ورود یکپارچه فعال شد؛ دکمه SSO در صفحه ورود نمایش داده می‌شود.'
+        ? 'تنظیمات ذخیره و ورود یکپارچه فعال شد (در فایل آینه هم پایدار شد).'
         : 'تنظیمات SSO ذخیره شد (ورود یکپارچه غیرفعال است).')
     } catch (e) { setErr(e.message) }
   }
@@ -49,28 +70,44 @@ export default function SsoSettings() {
       {msg && <div className="ok-box">{msg}</div>}
       {err && <div className="error-box">{err}</div>}
       <div className="card">
-        <h3>⚙️ تنظیمات ورود یکپارچه (Keycloak / OIDC)</h3>
+        <h3>⚙️ تنظیمات ورود یکپارچه (پرتال دانشجویار۳۶۰ / OIDC)</h3>
         <div className="hint">
-          هویت مرکزی با <code>issuer + sub</code> به حساب محلی متصل می‌شود. نقش‌ها و مجوزها همیشه در بک‌اند بررسی می‌شوند.
+          جریان استاندارد <b>Authorization Code + PKCE (S256)</b>؛ تبادل کد و اعتبارسنجی id_token (RS256، iss/aud/nonce) کاملاً در بک‌اند انجام می‌شود.
+          هویت با <code>issuer + sub</code> به حساب محلی متصل می‌شود و نقش‌ها همیشه در بک‌اند کنترل می‌شوند.
         </div>
         <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10 }}>
           <input type="checkbox" style={{ width: 'auto' }} checked={s.enabled} onChange={set('enabled')} />
-          فعال‌سازی ورود یکپارچه (دکمه SSO در صفحه ورود نمایش داده می‌شود)
+          فعال‌سازی ورود یکپارچه (دکمهٔ SSO با برچسب زیر در صفحه ورود نمایش داده می‌شود)
         </label>
-        <label className="fld">Issuer (مثال: https://sso.university.ac.ir/realms/daneshjoo360)</label>
+        <label className="fld">برچسب دکمهٔ ورود</label>
+        <input value={s.button_label || ''} onChange={set('button_label')} />
+        <label className="fld">Issuer — دقیقاً بدون اسلش انتهایی (پورت ۸۰۸۶، نه ۸۰۸۰!)</label>
         <input dir="ltr" style={{ textAlign: 'left' }} value={s.issuer} onChange={set('issuer')} />
         <div className="grid cols-2">
           <div>
-            <label className="fld">Client ID</label>
+            <label className="fld">Client ID (ثبت‌شده در clients.json پرتال)</label>
             <input dir="ltr" style={{ textAlign: 'left' }} value={s.client_id} onChange={set('client_id')} />
           </div>
           <div>
-            <label className="fld">Client Secret {s.client_secret_set ? '(ثبت‌شده — خالی بگذارید تا تغییر نکند)' : ''}</label>
-            <input dir="ltr" style={{ textAlign: 'left' }} type="password" value={s.client_secret} onChange={set('client_secret')} />
+            <label className="fld">نوع کلاینت</label>
+            <select dir="ltr" style={{ textAlign: 'left' }} value={s.client_type || 'public'} onChange={set('client_type')}>
+              <option value="public">public — با PKCE، بدون Secret (پرتال دانشجویار۳۶۰)</option>
+              <option value="confidential">confidential — با Client Secret</option>
+            </select>
+          </div>
+          {s.client_type === 'confidential' && (
+            <div>
+              <label className="fld">Client Secret {s.client_secret_set ? '(ثبت‌شده — خالی بگذارید تا تغییر نکند)' : ''}</label>
+              <input dir="ltr" style={{ textAlign: 'left' }} type="password" value={s.client_secret} onChange={set('client_secret')} />
+            </div>
+          )}
+          <div>
+            <label className="fld">Redirect URI — باید کاراکتربه‌کاراکتر در clients.json پرتال ثبت شود</label>
+            <input dir="ltr" style={{ textAlign: 'left' }} value={s.redirect_uri} onChange={set('redirect_uri')} />
           </div>
           <div>
-            <label className="fld">Redirect URI (در Keycloak ثبت شود)</label>
-            <input dir="ltr" style={{ textAlign: 'left' }} value={s.redirect_uri} onChange={set('redirect_uri')} />
+            <label className="fld">Post-Logout Redirect URI (بازگشت پس از خروج)</label>
+            <input dir="ltr" style={{ textAlign: 'left' }} value={s.post_logout_redirect_uri || ''} onChange={set('post_logout_redirect_uri')} />
           </div>
           <div>
             <label className="fld">Scope</label>
@@ -87,9 +124,13 @@ export default function SsoSettings() {
             </label>
           ))}
         </label>
+        <div className="hint" style={{ marginTop: 6 }}>
+          نقش‌ها در هر ورود: اگر در claim <code>resource_access["{s.client_id}"].roles</code> نقشی با پسوند <code>.admin</code> باشد ← مدیر سامانه؛
+          در غیر این صورت نقش‌های پیش‌فرض. حساب‌های موجود هم‌نام با <code>preferred_username</code> خودکار متصل می‌شوند.
+        </div>
         <div className="row" style={{ marginTop: 14 }}>
           <button className="btn" onClick={save}>ذخیره تنظیمات</button>
-          <button className="btn secondary" onClick={test}>🔌 تست اتصال به سرور هویت</button>
+          <button className="btn secondary" onClick={test}>🔌 تست اتصال به پرتال (Discovery + JWKS)</button>
         </div>
         {testResult && (
           <>
@@ -99,7 +140,9 @@ export default function SsoSettings() {
                 issuer: {testResult.provider.issuer_reported}<br />
                 authorize: {testResult.provider.authorization_endpoint}<br />
                 token: {testResult.provider.token_endpoint}<br />
-                userinfo: {testResult.provider.userinfo_endpoint}
+                userinfo: {testResult.provider.userinfo_endpoint}<br />
+                jwks: {testResult.provider.jwks_uri} ({testResult.jwks_keys} keys)<br />
+                end_session: {testResult.provider.end_session_endpoint}
               </div>
             )}
           </>
@@ -108,16 +151,24 @@ export default function SsoSettings() {
       </div>
 
       <div className="card">
-        <h3>راهنمای گام‌به‌گام Keycloak</h3>
-        <ol style={{ paddingRight: 20, fontSize: 13.5 }}>
-          <li>در Keycloak یک Realm بسازید (مثال <code>daneshjoo360</code>).</li>
-          <li>Clients ← Create: شناسه <code>pajoohesh-yar360</code>، نوع <code>openid-connect</code>.</li>
-          <li>Valid Redirect URIs را دقیقاً برابر مقدار Redirect URI همین صفحه قرار دهید (مثال <code>http://SERVER:8000/sso/callback</code>).</li>
-          <li>در تب Credentials، Client Secret را کپی و در همین فرم وارد کنید.</li>
-          <li>Issuer را برابر <code>https://سرور-کی‌کلوک/realms/daneshjoo360</code> تنظیم و ذخیره کنید، سپس «تست اتصال» را بزنید.</li>
-          <li>برای اتصال حساب‌های موجود، کاربر ابتدا با نام کاربری وارد شود؛ ورود SSO بعدی هویت را به‌صورت خودکار به حساب متصل می‌کند.</li>
+        <h3>راهنمای گام‌به‌گام اتصال به پرتال دانشجویار۳۶۰</h3>
+        <ol style={{ paddingRight: 20, fontSize: 13.5, lineHeight: 1.9 }}>
+          <li><b>بررسی سلامت پرتال:</b> <code dir="ltr">GET http://188.212.96.235:8086/healthz</code> باید <code dir="ltr">{`{"status":"ok"}`}</code> بدهد. اگر پاسخ نداد، سرویس پرتال خاموش است — روی سرور پرتال <code dir="ltr">RUN-PORTAL.bat</code> را اجرا کنید.</li>
+          <li><b>ثبت client این سامانه در پرتال:</b> از مدیر SSO بخواهید کلید زیر را در فایل <code dir="ltr">data/clients.json</code> پرتال اضافه و پرتال را یک‌بار ری‌استارت کند:</li>
         </ol>
-        <div className="hint">توجه: سامانه‌های دیگر اکوسیستم (برنامه‌یار۳۶۰، درسیار۳۶۰ و …) با همان Realm مشترک، ورود یکپارچه دارند.</div>
+        <pre dir="ltr" style={{ background: '#f4f6fb', padding: 12, borderRadius: 8, fontSize: 12.5, overflowX: 'auto', textAlign: 'left' }}>{CLIENT_SNIPPET}</pre>
+        <ol start={3} style={{ paddingRight: 20, fontSize: 13.5, lineHeight: 1.9 }}>
+          <li><b>Redirect URI را دقیق کنید:</b> مقدار «Redirect URI» فرم بالا باید با آنچه در clients.json ثبت شده کاراکتربه‌کاراکتر یکی باشد (http/https، پورت، اسلش). با تغییر آدرس استقرار سامانه، هر دو طرف را هم‌زمان اصلاح کنید.</li>
+          <li><b>ذخیره و تست:</b> تیک فعال‌سازی را بزنید، «ذخیره تنظیمات» و سپس «تست اتصال» را بزنید — Discovery و JWKS واقعی پرتال خوانده و تعداد کلیدها گزارش می‌شود.</li>
+          <li><b>اتصال حساب‌های موجود:</b> هر کاربر از «پروفایل ← حساب دانشگاهی (SSO)» هویت پرتال را به حسابش متصل می‌کند؛ حساب‌های هم‌نام با نام کاربری پرتال در اولین ورود خودکار وصل می‌شوند.</li>
+        </ol>
+        <div className="hint">
+          اگر کاربران بیرونی پرتال را باز نمی‌کنند: <code dir="ltr">OPEN-FIREWALL.bat</code> را روی سرور پرتال اجرا کنید (TCP 8086 در فایروال ویندوز و Security Group).
+          خطای «connection refused» یعنی سرویس پرتال اجرا نیست.
+        </div>
+        <div className="hint">
+          حساب‌های آزمون پرتال: <code dir="ltr">m.ahmadi / Student@360</code> (دانشجو)، <code dir="ltr">s.hosseini / Staff@360</code> (کارمند)، <code dir="ltr">admin / Admin@360</code> (مدیر پرتال) — در محیط واقعی رمزها عوض شود.
+        </div>
       </div>
     </>
   )

@@ -86,7 +86,7 @@ export default function Layout({ children }) {
           {user.role_labels?.join('، ')}
           {user.sso_linked && <div>🔗 متصل به SSO</div>}
         </div>
-        <button className="logout" onClick={() => { logout(); nav('/login') }}>خروج از حساب</button>
+        <button className="logout" onClick={async () => { const end = await logout(); if (!end) nav('/login') }}>خروج از حساب</button>
       </aside>
       <div className="main">
         <header className="topbar">

@@ -32,7 +32,16 @@ export function AuthProvider({ children }) {
     setUser(userData)
   }
 
-  const logout = () => { setToken(''); setUser(null) }
+  const logout = async () => {
+    let endUrl = ''
+    try {
+      const d = await api('/auth/logout', { method: 'POST' })
+      endUrl = (d && d.end_session_url) || ''
+    } catch { /* خروجِ محلی همیشه انجام می‌شود */ }
+    setToken('')
+    setUser(null)
+    return endUrl
+  }
   const hasRole = (...roles) => !!(user && (user.roles || []).some(r => roles.includes(r)))
 
   return (

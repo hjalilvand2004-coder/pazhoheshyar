@@ -60,3 +60,11 @@ SEED_ON_START = os.environ.get("SEED_ON_START", "1") == "1"
 APP_NAME = "پژوهشیار۳۶۰"
 APP_VERSION = "1.0.0"
 SSO_ISSUER_LABEL = "daneshjoo360-sso"
+
+# ------------------------------------------------ پرتال ورود یکپارچهٔ دانشجویار۳۶۰ (طبق سند ادغام رسمی)
+# این مقادیر «تنظیمات اولیه» هستند؛ مدیر سامانه از پنل مدیریت می‌تواند تغییرشان دهد.
+SSO_PORTAL_ISSUER = "http://188.212.96.235:8086"     # دقیقاً و بدون اسلش انتهایی
+SSO_PORTAL_CLIENT_ID = "pazhoheshyar360"             # باید در data/clients.json پرتال ثبت شود
+SSO_FLOW_COOKIE = "py_sso_flow"                      # کوکی HttpOnly حامل state/nonce/code_verifier
+SSO_FLOW_TTL_SECONDS = 600                           # ~۱۰ دقیقه
+SSO_JWKS_CACHE_SECONDS = 3600                        # کش JWKS حداکثر ۱ ساعت (چرخش کلید بی‌دردسر)

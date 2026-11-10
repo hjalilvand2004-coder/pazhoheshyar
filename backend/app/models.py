@@ -26,10 +26,13 @@ class SsoSettings(Base):
     __tablename__ = "sso_settings"
     id = Column(Integer, primary_key=True, default=1)
     enabled = Column(Boolean, default=False)
-    issuer = Column(String(400), default="")          # مثال: https://sso.univ.ac.ir/realms/daneshjoo360
-    client_id = Column(String(200), default="pajoohesh-yar360")
-    client_secret = Column(String(400), default="")
-    redirect_uri = Column(String(400), default="http://localhost:3000/sso/callback")
+    issuer = Column(String(400), default="")          # مثال: http://188.212.96.235:8086 (پرتال دانشجویار۳۶۰)
+    client_id = Column(String(200), default="pazhoheshyar360")
+    client_type = Column(String(20), default="public")   # public+PKCE یا confidential
+    client_secret = Column(String(400), default="")      # فقط برای confidential
+    redirect_uri = Column(String(400), default="")       # باید کاراکتربه‌کاراکتر در clients.json ثبت شود
+    post_logout_redirect_uri = Column(String(400), default="")
+    button_label = Column(String(120), default="")       # برچسب دکمهٔ ورود SSO
     scope = Column(String(200), default="openid profile email")
     auto_create_users = Column(Boolean, default=False)
     default_roles = Column(JSON, default=lambda: ["student"])

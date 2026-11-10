@@ -12,8 +12,12 @@ export default function Callback() {
   useEffect(() => {
     const code = params.get('code')
     const state = params.get('state')
-    if (!code) { setError('کد بازگشتی از سرور هویت یافت نشد.'); return }
-    api(`/auth/sso/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state || '')}`)
+    const error = params.get('error')
+    if (!code && !error) { setError('کد بازگشتی از سرور هویت یافت نشد.'); return }
+    const qs = error
+      ? `error=${encodeURIComponent(error)}`
+      : `code=${encodeURIComponent(code)}&state=${encodeURIComponent(state || '')}`
+    api(`/auth/sso/callback?${qs}`)
       .then(data => {
         loginWithSsoToken(data.token, data.user)
         nav('/')

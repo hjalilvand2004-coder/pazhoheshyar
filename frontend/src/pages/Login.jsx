@@ -43,9 +43,9 @@ export default function Login() {
           type="button" className="btn secondary" style={{ width: '100%', justifyContent: 'center' }}
           disabled={!sso.enabled}
           onClick={() => { window.location.assign('/api/v1/auth/sso/login') }}
-          title={sso.enabled ? 'ورود با حساب دانشگاهی (Keycloak)' : 'ورود یکپارچه هنوز فعال نشده است'}
+          title={sso.enabled ? 'ورود با حساب پرتال سازمانی (SSO)' : 'ورود یکپارچه هنوز فعال نشده است'}
         >
-          🏫 ورود با حساب دانشگاهی (SSO)
+          🏫 {sso.button_label || 'ورود با حساب دانشگاهی (SSO)'}
         </button>
         {!sso.enabled && <div className="hint" style={{ marginTop: 6, textAlign: 'center' }}>{sso.message || 'وضعیت SSO نامشخص'}</div>}
         <div className="demo-accounts">

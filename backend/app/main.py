@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .core.config import APP_NAME, APP_VERSION, FRONTEND_DIST
 from .core.database import SessionLocal, init_db
+from .models import SsoSettings
 from .seed import seed
 
 app = FastAPI(
@@ -59,12 +60,52 @@ app.include_router(registry_router)
 @app.on_event("startup")
 def startup():
     init_db()
+    _migrate_sso_columns()
+    _upgrade_placeholder_sso()
     if os.environ.get("SEED_ON_START", "1") == "1":
         db = SessionLocal()
         try:
             seed(db)
         finally:
             db.close()
+
+
+def _upgrade_placeholder_sso():
+    """ارتقای یک‌بارهٔ تنظیمات قدیمی placeholder به پیکربندی پرتال دانشجویار۳۶۰."""
+    try:
+        from .core.sso_store import INITIAL_SSO, mirror_write
+        db = SessionLocal()
+        try:
+            row = db.get(SsoSettings, 1)
+            if row and "example" in (row.issuer or ""):  # مقدار نمونهٔ قدیمی — هرگز کار نکرده است
+                for k, v in INITIAL_SSO.items():
+                    setattr(row, k, v)
+                db.commit()
+                mirror_write(row)
+        finally:
+            db.close()
+    except Exception:
+        pass
+
+
+def _migrate_sso_columns():
+    """افزودن ستون‌های جدید SSO به دیتابیس‌های قدیمی‌تر (بدون از دست رفتن داده)."""
+    from sqlalchemy import text
+    from .core.database import engine
+    new_cols = [
+        ("client_type", "VARCHAR(20) DEFAULT 'confidential' NOT NULL"),
+        ("post_logout_redirect_uri", "VARCHAR(400) DEFAULT '' NOT NULL"),
+        ("button_label", "VARCHAR(120) DEFAULT '' NOT NULL"),
+    ]
+    try:
+        with engine.begin() as conn:
+            existing = {row[1] for row in conn.execute(text("PRAGMA table_info(sso_settings)"))}
+            if existing:  # جدول موجود است
+                for name, ddl in new_cols:
+                    if name not in existing:
+                        conn.execute(text(f"ALTER TABLE sso_settings ADD COLUMN {name} {ddl}"))
+    except Exception:
+        pass  # دیتابیس تازه ساخته می‌شود / موتور غیر SQLite — create_all ستون‌ها را دارد
 
 
 @app.exception_handler(HTTPException)

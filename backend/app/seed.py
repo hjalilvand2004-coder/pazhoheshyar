@@ -108,6 +108,10 @@ def seed(db) -> None:
         ))
 
     if not db.get(SsoSettings, 1):
-        db.add(SsoSettings(id=1, enabled=False, issuer="https://sso.example.ac.ir/realms/daneshjoo360",
-                           client_id="pajoohesh-yar360", redirect_uri="http://localhost:3000/sso/callback"))
+        # تنظیمات اولیهٔ ورود یکپارچه بر اساس سند ادغام پرتال دانشجویار۳۶۰
+        from .core.sso_store import INITIAL_SSO, mirror_write
+        row = SsoSettings(id=1, **INITIAL_SSO)
+        db.add(row)
+        db.commit()
+        mirror_write(row)  # فایل آینه از همان ابتدا پایدار می‌شود
     db.commit()
