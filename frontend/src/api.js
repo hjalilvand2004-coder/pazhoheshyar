@@ -35,6 +35,8 @@ export async function uploadFile(path, file) {
   return api(path, { method: 'POST', form: fd })
 }
 
+export const toFa = (s) => String(s ?? '').replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[d])
+
 export const fmtDate = (iso) => {
   if (!iso) return '—'
   try { return new Date(iso).toLocaleDateString('fa-IR', { year: 'numeric', month: 'long', day: 'numeric' }) }

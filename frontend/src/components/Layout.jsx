@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react'
-import { NavLink, useNavigate, useLocation } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth.jsx'
 import { api, fmtDateTime } from '../api.js'
+import Breadcrumbs from './Breadcrumbs.jsx'
 
 function Bell() {
   const [open, setOpen] = useState(false)
@@ -68,8 +69,6 @@ const MENUS = [
 export default function Layout({ children }) {
   const { user, logout } = useAuth()
   const nav = useNavigate()
-  const loc = useLocation()
-  const title = MENUS.find(m => (m.end ? loc.pathname === m.to : loc.pathname.startsWith(m.to)))?.label || 'پژوهشیار۳۶۰'
 
   return (
     <div className="app-shell">
@@ -90,12 +89,12 @@ export default function Layout({ children }) {
       </aside>
       <div className="main">
         <header className="topbar">
-          <h1>{title}</h1>
+          <Breadcrumbs />
           <Bell />
         </header>
         <main className="content">{children}</main>
         <footer className="footer">
-          پژوهشیار۳۶۰ — نسخه ۱.۰.۰ | بخشی از اکوسیستم دانشجو۳۶۰ | داده‌های نمایشی صریحاً «آزمایشی» برچسب خورده‌اند
+          پژوهشیار۳۶۰ — نسخه ۱.۰.۲ | بخشی از اکوسیستم دانشجو۳۶۰ | داده‌های نمایشی صریحاً «آزمایشی» برچسب خورده‌اند
         </footer>
       </div>
     </div>
