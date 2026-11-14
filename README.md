@@ -9,6 +9,21 @@
 
 ---
 
+## استقرار روی سرور (پورت 8088) + ورود یکپارچه با پرتال
+
+برای بردن سامانه روی سرور تولیدی `http://188.212.96.235:8088` به‌همراه ثبت کلاینت SSO روی پرتال دانشجویار۳۶۰، کیت آماده در پوشه `deploy/` است:
+
+```bash
+git clone --depth 1 https://github.com/hjalilvand2004-coder/pazhoheshyar.git
+cd pazhoheshyar
+sudo bash deploy/deploy.sh        # استقرار کامل: venv + systemd + تست سلامت
+sudo bash deploy/update.sh        # به‌روزرسانی‌های بعدی
+```
+
+راهنمای گام‌به‌گام فارسی (شامل اسنیپت آمادهٔ `data/clients.json` پرتال برای کلاینت `pazhoheshyar360`، صحت‌سنجی ورود یکپارچه، متغیرهای محیطی و جدول عیب‌یابی): **[deploy/README-FA.md](deploy/README-FA.md)**
+
+---
+
 ## ۱) اجرای سریع
 
 ### راه الف — بدون نیاز به پایتون/پای‌چارم (سیستم مقصد)
@@ -53,7 +68,7 @@ git push origin v1.0.1
 
 ```bash
 docker compose up --build
-# مرورگر: http://localhost:8000
+# مرورگر: http://localhost:8088
 ```
 
 ### راه ب — اجرای سورس با پایتون

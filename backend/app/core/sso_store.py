@@ -6,6 +6,7 @@
 تنظیمات اولیهٔ پرتال ساخته می‌شود. سناریوی پذیرش ۱۰ سند با همین مکانیزم سبز می‌شود.
 """
 import json
+import os
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -26,8 +27,10 @@ INITIAL_SSO = {
     "client_id": SSO_PORTAL_CLIENT_ID,
     "client_type": "public",          # client عمومی + PKCE/S256 — بدون client_secret
     "client_secret": "",
-    "redirect_uri": "http://188.212.96.235:8000/sso/callback",
-    "post_logout_redirect_uri": "http://188.212.96.235:8000/?loggedOut=1",
+    # مسیر callback باید دقیقاً با مسیر واقعی روتر (api/v1/auth/sso/callback) و
+    # با مقدار ثبت‌شده در data/clients.json پرتال کاراکتربه‌کاراکتر یکی باشد.
+    "redirect_uri": "http://188.212.96.235:8088/api/v1/auth/sso/callback",
+    "post_logout_redirect_uri": "http://188.212.96.235:8088/?loggedOut=1",
     "button_label": "ورود با حساب پرتال دانشجویار۳۶۰",
     "scope": "openid profile email",
     "auto_create_users": True,
@@ -73,14 +76,31 @@ def _row_from_dict(db: Session, d: dict) -> SsoSettings:
     return s
 
 
+def _apply_env_overrides(s: SsoSettings) -> SsoSettings:
+    """نشانی‌های بازگشتِ استقرار تولیدی را از متغیر محیطی حتمی می‌کند.
+
+    در استقرار سرور (systemd/داکر) اگر SSO_REDIRECT_URI یا
+    SSO_POST_LOGOUT_REDIRECT_URI ست شده باشند، بر مقدار پنل مدیریت اولویت
+    دارند تا نشانی callback همیشه با clients.json پرتال یکی بماند.
+    اعمال فقط در حافظه است؛ با حذف متغیر، تنظیم پنل دوباره معتبر می‌شود.
+    """
+    env_redirect = os.environ.get("SSO_REDIRECT_URI", "").strip()
+    env_logout = os.environ.get("SSO_POST_LOGOUT_REDIRECT_URI", "").strip()
+    if env_redirect:
+        s.redirect_uri = env_redirect
+    if env_logout:
+        s.post_logout_redirect_uri = env_logout
+    return s
+
+
 def get_settings(db: Session) -> SsoSettings:
     """خواندن خودترمیم‌شونده: جدول ← فایل آینه ← تنظیمات اولیهٔ پرتال."""
     s = db.get(SsoSettings, 1)
     if s:
-        return s
+        return _apply_env_overrides(s)
     mirror = _mirror_read()
     if mirror and isinstance(mirror.get("sso"), dict):
         data = {k: v for k, v in mirror["sso"].items()
                 if k in {c.name for c in SsoSettings.__table__.columns} - {"id", "updated_at"}}
-        return _row_from_dict(db, data)
-    return _row_from_dict(db, dict(INITIAL_SSO))
+        return _apply_env_overrides(_row_from_dict(db, data))
+    return _apply_env_overrides(_row_from_dict(db, dict(INITIAL_SSO)))
