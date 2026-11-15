@@ -24,7 +24,7 @@ from app.main import app
 
 # ---------------------------------------------------------------- سرور هویت آزمایشی (شبیه پرتال دانشجویار۳۶۰)
 ISSUER = None  # پس از بالا آمدن سرور روی پورت تصادفی مقدار می‌گیرد
-CLIENT_ID = "pazhoheshyar360"
+CLIENT_ID = "pajouhyar360"
 KID = "portal-key-1"
 CODES: dict[str, dict] = {}     # code -> {sub, challenge, redirect_uri, nonce}
 TOKENS: dict[str, str] = {}     # access_token -> sub
@@ -151,7 +151,7 @@ def idp_base_url():
         "kc-user-2002": {"sub": "kc-user-2002", "preferred_username": "sara.ahmadi",
                          "name": "سارا احمدی", "email": "sara.ahmadi@univ.ac.ir", "roles": []},
         "kc-admin-999": {"sub": "kc-admin-999", "preferred_username": "portal.admin",
-                         "name": "مدیر پرتال", "email": "admin@univ.ac.ir", "roles": ["pazhoheshyar360.admin"]},
+                         "name": "مدیر پرتال", "email": "admin@univ.ac.ir", "roles": ["pajouhyar360.admin"]},
     })
     yield ISSUER
     server.should_exit = True
@@ -348,7 +348,7 @@ def test_07_id_token_validation_tampering(client, idp_base_url):
 
 def test_08_roles_from_resource_access(client, idp_base_url):
     """گام ۵ سند: پسوند .admin → مدیر سامانه؛ بدون نقش → نقش پیش‌فرض."""
-    CURRENT["sub"] = "kc-admin-999"  # نقش pazhoheshyar360.admin دارد
+    CURRENT["sub"] = "kc-admin-999"  # نقش pajouhyar360.admin دارد
     try:
         data = full_sso_roundtrip(client)
         assert "system_admin" in data["user"]["roles"]

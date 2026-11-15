@@ -99,10 +99,10 @@ cat <<EOF
   به‌روزرسانی بعدی:   sudo bash $APP_DIR/deploy/update.sh
   راهنمای کامل:      $APP_DIR/deploy/README-FA.md
 
-  ▸ گام باقی‌ماندهٔ مهم — ثبت کلاینت SSO روی پرتال:
-    خطای «کلاینت ناشناس» یعنی client_id=pazhoheshyar360 هنوز در
+  ▸ گام باقی‌ماندهٔ مهم — ثبت/فعال‌سازی کلاینت SSO روی پرتال:
+    خطای «کلاینت ناشناس» یعنی client_id=pajouhyar360 هنوز در
     data/clients.json پرتال دانشجویار۳۶۰ (سمت پرتال، پورت 8086)
-    ثبت نشده. اسنیپت آماده:
+    ثبت و فعال نشده. اسنیپت آماده:
         $APP_DIR/deploy/portal-clients.json.snippet.json
     را مطابق راهنمای deploy/README-FA.md (بخش ۳) به پرتال اضافه
     کنید، سرویس پرتال را بازراه‌اندازی کنید و سامانه را در پنل

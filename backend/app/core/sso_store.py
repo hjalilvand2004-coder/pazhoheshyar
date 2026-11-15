@@ -79,13 +79,16 @@ def _row_from_dict(db: Session, d: dict) -> SsoSettings:
 def _apply_env_overrides(s: SsoSettings) -> SsoSettings:
     """نشانی‌های بازگشتِ استقرار تولیدی را از متغیر محیطی حتمی می‌کند.
 
-    در استقرار سرور (systemd/داکر) اگر SSO_REDIRECT_URI یا
+    در استقرار سرور (systemd/داکر) اگر SSO_CLIENT_ID یا SSO_REDIRECT_URI یا
     SSO_POST_LOGOUT_REDIRECT_URI ست شده باشند، بر مقدار پنل مدیریت اولویت
-    دارند تا نشانی callback همیشه با clients.json پرتال یکی بماند.
+    دارند تا مقادیر جریان ورود همیشه با clients.json پرتال یکی بماند.
     اعمال فقط در حافظه است؛ با حذف متغیر، تنظیم پنل دوباره معتبر می‌شود.
     """
+    env_client = os.environ.get("SSO_CLIENT_ID", "").strip()
     env_redirect = os.environ.get("SSO_REDIRECT_URI", "").strip()
     env_logout = os.environ.get("SSO_POST_LOGOUT_REDIRECT_URI", "").strip()
+    if env_client:
+        s.client_id = env_client
     if env_redirect:
         s.redirect_uri = env_redirect
     if env_logout:

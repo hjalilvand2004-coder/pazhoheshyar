@@ -16,6 +16,7 @@ from app.models import SsoSettings
 
 REDIRECT_8088 = "http://188.212.96.235:8088/api/v1/auth/sso/callback"
 LOGOUT_8088 = "http://188.212.96.235:8088/?loggedOut=1"
+CLIENT_ID_PORTAL = "pajouhyar360"  # همان که در پنل مدیریت پرتال دانشجویار۳۶۰ ثبت شده
 
 
 def _set_panel_values(redirect_uri: str, post_logout: str) -> None:
@@ -27,7 +28,7 @@ def _set_panel_values(redirect_uri: str, post_logout: str) -> None:
             row = SsoSettings(id=1, enabled=True)
             db.add(row)
         row.issuer = "http://portal.test"
-        row.client_id = "pazhoheshyar360"
+        row.client_id = CLIENT_ID_PORTAL
         row.redirect_uri = redirect_uri
         row.post_logout_redirect_uri = post_logout
         db.commit()
@@ -36,7 +37,8 @@ def _set_panel_values(redirect_uri: str, post_logout: str) -> None:
 
 
 def test_initial_sso_matches_production_deployment():
-    """تنظیمات اولیه باید دقیقاً مطابق استقرار تولیدی (پورت 8088 + مسیر واقعی روتر) باشد."""
+    """تنظیمات اولیه باید دقیقاً مطابق استقرار تولیدی و ثبت پرتال باشد."""
+    assert sso_store.INITIAL_SSO["client_id"] == CLIENT_ID_PORTAL
     assert sso_store.INITIAL_SSO["redirect_uri"] == REDIRECT_8088
     assert sso_store.INITIAL_SSO["post_logout_redirect_uri"] == LOGOUT_8088
 
@@ -58,11 +60,16 @@ def test_panel_setting_used_without_env():
 def test_env_override_wins_over_panel_setting():
     """با متغیر محیطی استقرار، نشانی callback حتمی به مقدار 8088 قفل می‌شود."""
     _set_panel_values("http://188.212.96.235:8000/sso/callback", "http://188.212.96.235:8000/?loggedOut=1")
-    env = {"SSO_REDIRECT_URI": REDIRECT_8088, "SSO_POST_LOGOUT_REDIRECT_URI": LOGOUT_8088}
+    env = {
+        "SSO_CLIENT_ID": CLIENT_ID_PORTAL,
+        "SSO_REDIRECT_URI": REDIRECT_8088,
+        "SSO_POST_LOGOUT_REDIRECT_URI": LOGOUT_8088,
+    }
     with mock.patch.dict(os.environ, env):
         db = SessionLocal()
         try:
             s = get_settings(db)
+            assert s.client_id == CLIENT_ID_PORTAL
             assert s.redirect_uri == REDIRECT_8088
             assert s.post_logout_redirect_uri == LOGOUT_8088
         finally:

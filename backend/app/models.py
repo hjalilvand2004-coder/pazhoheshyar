@@ -27,7 +27,7 @@ class SsoSettings(Base):
     id = Column(Integer, primary_key=True, default=1)
     enabled = Column(Boolean, default=False)
     issuer = Column(String(400), default="")          # مثال: http://188.212.96.235:8086 (پرتال دانشجویار۳۶۰)
-    client_id = Column(String(200), default="pazhoheshyar360")
+    client_id = Column(String(200), default="pajouhyar360")
     client_type = Column(String(20), default="public")   # public+PKCE یا confidential
     client_secret = Column(String(400), default="")      # فقط برای confidential
     redirect_uri = Column(String(400), default="")       # باید کاراکتربه‌کاراکتر در clients.json ثبت شود

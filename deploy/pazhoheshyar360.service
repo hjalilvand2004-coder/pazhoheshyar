@@ -10,8 +10,9 @@ WorkingDirectory=__APP_DIR__/backend
 Environment=PYTHONUTF8=1
 Environment=PORT=__PORT__
 Environment=HOST=0.0.0.0
-# نشانی‌های بازگشت SSO مطابق clients.json پرتال دانشجویار۳۶۰ —
+# مقادیر جریان SSO مطابق clients.json/پنل پرتال دانشجویار۳۶۰ —
 # اگر ست باشند بر مقدار پنل مدیریت همین سامانه اولویت دارند.
+Environment=SSO_CLIENT_ID=pajouhyar360
 Environment=SSO_REDIRECT_URI=http://188.212.96.235:__PORT__/api/v1/auth/sso/callback
 Environment=SSO_POST_LOGOUT_REDIRECT_URI=http://188.212.96.235:__PORT__/?loggedOut=1
 # SECRET_KEY به‌صورت خودکار در data/.secret ساخته و پایدار نگه داشته می‌شود؛
