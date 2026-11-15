@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth.jsx'
 import { api, fmtDateTime } from '../api.js'
 import Breadcrumbs from './Breadcrumbs.jsx'
@@ -54,28 +54,34 @@ function Bell() {
 }
 
 const MENUS = [
-  { to: '/', label: 'داشبورد', roles: ['student', 'professor', 'research_manager', 'system_admin'], end: true },
-  { to: '/requests/new', label: 'ثبت درخواست پژوهش', roles: ['student'] },
-  { to: '/pool', label: 'استخر پژوهشی', roles: ['professor', 'research_manager', 'system_admin'] },
-  { to: '/topics', label: 'بانک موضوعات', roles: ['student', 'professor', 'research_manager', 'system_admin'] },
-  { to: '/chat', label: 'گفت‌وگوها', roles: ['student', 'professor'] },
-  { to: '/projects', label: 'پروژه‌های من', roles: ['student', 'professor', 'research_manager', 'system_admin'] },
-  { to: '/ai', label: 'دستیار هوشمند', roles: ['student', 'professor', 'research_manager'] },
-  { to: '/admin', label: 'داشبورد مدیریت پژوهش', roles: ['research_manager', 'system_admin'] },
-  { to: '/admin/sso', label: 'تنظیمات ورود یکپارچه', roles: ['system_admin'] },
-  { to: '/profile', label: 'پروفایل پژوهشی', roles: ['student', 'professor', 'research_manager', 'system_admin'] },
+  { to: '/', label: 'داشبورد', ic: '🏠', roles: ['student', 'professor', 'research_manager', 'system_admin'], end: true },
+  { to: '/requests/new', label: 'ثبت درخواست پژوهش', ic: '✍️', roles: ['student'] },
+  { to: '/pool', label: 'استخر پژوهشی', ic: '🌊', roles: ['professor', 'research_manager', 'system_admin'] },
+  { to: '/topics', label: 'بانک موضوعات', ic: '📚', roles: ['student', 'professor', 'research_manager', 'system_admin'] },
+  { to: '/chat', label: 'گفت‌وگوها', ic: '💬', roles: ['student', 'professor'] },
+  { to: '/projects', label: 'پروژه‌های من', ic: '🗂️', roles: ['student', 'professor', 'research_manager', 'system_admin'] },
+  { to: '/ai', label: 'دستیار هوشمند', ic: '🤖', roles: ['student', 'professor', 'research_manager'] },
+  { to: '/admin', label: 'داشبورد مدیریت پژوهش', ic: '📊', roles: ['research_manager', 'system_admin'] },
+  { to: '/admin/sso', label: 'تنظیمات ورود یکپارچه', ic: '🔐', roles: ['system_admin'] },
+  { to: '/profile', label: 'پروفایل پژوهشی', ic: '👤', roles: ['student', 'professor', 'research_manager', 'system_admin'] },
 ]
 
 export default function Layout({ children }) {
   const { user, logout } = useAuth()
   const nav = useNavigate()
+  const loc = useLocation()
 
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="brand">پژوهشیار۳۶۰<small>اکوسیستم دانشجو۳۶۰</small></div>
+        <div className="brand">
+          <span className="logo-chip">🎓</span>
+          <span>پژوهشیار۳۶۰<small>اکوسیستم دانشجو۳۶۰</small></span>
+        </div>
+        <div className="nav-cap">منوی اصلی</div>
         {MENUS.filter(m => m.roles.some(r => (user.roles || []).includes(r))).map(m => (
           <NavLink key={m.to} to={m.to} end={m.end} className={({ isActive }) => (isActive ? 'active' : '')}>
+            <span className="ic">{m.ic}</span>
             {m.label}
           </NavLink>
         ))}
@@ -83,7 +89,7 @@ export default function Layout({ children }) {
         <div className="userbox">
           <b>{user.display_name}</b>
           {user.role_labels?.join('، ')}
-          {user.sso_linked && <div>🔗 متصل به SSO</div>}
+          {user.sso_linked && <div className="sso-tag">🔗 متصل به SSO</div>}
         </div>
         <button className="logout" onClick={async () => { const end = await logout(); if (!end) nav('/login') }}>خروج از حساب</button>
       </aside>
@@ -92,9 +98,9 @@ export default function Layout({ children }) {
           <Breadcrumbs />
           <Bell />
         </header>
-        <main className="content">{children}</main>
+        <main className="content" key={loc.pathname}>{children}</main>
         <footer className="footer">
-          پژوهشیار۳۶۰ — نسخه ۱.۰.۲ | بخشی از اکوسیستم دانشجو۳۶۰ | داده‌های نمایشی صریحاً «آزمایشی» برچسب خورده‌اند
+          پژوهشیار۳۶۰ — نسخه ۱.۰.۵ | بخشی از اکوسیستم دانشجو۳۶۰ | داده‌های نمایشی صریحاً «آزمایشی» برچسب خورده‌اند
         </footer>
       </div>
     </div>

@@ -3,11 +3,14 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../auth.jsx'
 import { api, REQ_STATUS, STATUS_BADGE, fmtDateTime } from '../api.js'
 
-function StatusCard({ label, num }) {
+function StatTile({ icon, bg, label, num }) {
   return (
-    <div className="stat">
-      <div className="num">{num ?? '—'}</div>
-      <div className="lbl">{label}</div>
+    <div className="stat-tile">
+      <div className="ic" style={bg ? { background: bg } : undefined}>{icon}</div>
+      <div>
+        <div className="num">{num ?? '—'}</div>
+        <div className="lbl">{label}</div>
+      </div>
     </div>
   )
 }
@@ -41,44 +44,49 @@ export default function Dashboard() {
 
   return (
     <>
-      <div className="card">
-        <h3>سلام {user.display_name} 👋</h3>
-        <div className="hint">
-          نقش‌های شما: {user.role_labels?.join('، ')} —
-          {' '}پژوهشیار۳۶۰ کشف استعداد پژوهشی، اتصال دانشجو و استاد و مدیریت مسیر پژوهش تا انتشار را ممکن می‌کند.
+      <div className="dash-hero">
+        <div className="dash-hero-in">
+          <div className="icon-big">👋</div>
+          <div>
+            <h2>سلام {user.display_name}</h2>
+            <p>
+              نقش‌های شما: {user.role_labels?.join('، ')} — پژوهشیار۳۶۰ کشف استعداد پژوهشی، اتصال دانشجو و استاد
+              و مدیریت مسیر پژوهش تا انتشار را ممکن می‌کند.
+            </p>
+            <div className="hero-actions">
+              {hasRole('student') && (
+                <>
+                  <Link className="btn hero-btn solid" to="/requests/new">➕ ثبت درخواست پژوهش</Link>
+                  <Link className="btn hero-btn" to="/topics">📚 بانک موضوعات اساتید</Link>
+                  <Link className="btn hero-btn" to="/ai">🤖 دستیار هوشمند</Link>
+                </>
+              )}
+              {hasRole('professor') && (
+                <>
+                  <Link className="btn hero-btn solid" to="/pool">🔍 استخر پژوهشی</Link>
+                  <Link className="btn hero-btn" to="/topics">📢 انتشار موضوع/الگوی استاندارد</Link>
+                </>
+              )}
+              {hasRole('research_manager') && (
+                <Link className="btn hero-btn solid" to="/admin">📊 داشبورد مدیریت پژوهش</Link>
+              )}
+              {hasRole('system_admin') && (
+                <>
+                  <Link className="btn hero-btn solid" to="/admin/sso">⚙️ تنظیمات ورود یکپارچه (SSO)</Link>
+                  <Link className="btn hero-btn" to="/admin">📊 شاخص‌ها</Link>
+                </>
+              )}
+            </div>
+          </div>
         </div>
-        {hasRole('student') && (
-          <div className="row" style={{ marginTop: 12 }}>
-            <Link className="btn" to="/requests/new">➕ ثبت درخواست پژوهش</Link>
-            <Link className="btn secondary" to="/topics">📚 بانک موضوعات اساتید</Link>
-            <Link className="btn secondary" to="/ai">🤖 دستیار هوشمند</Link>
-          </div>
-        )}
-        {hasRole('professor') && (
-          <div className="row" style={{ marginTop: 12 }}>
-            <Link className="btn" to="/pool">🔍 استخر پژوهشی</Link>
-            <Link className="btn secondary" to="/topics">📢 انتشار موضوع/الگوی استاندارد</Link>
-          </div>
-        )}
-        {hasRole('research_manager') && (
-          <div className="row" style={{ marginTop: 12 }}>
-            <Link className="btn" to="/admin">📊 داشبورد مدیریت پژوهش</Link>
-          </div>
-        )}
-        {hasRole('system_admin') && (
-          <div className="row" style={{ marginTop: 12 }}>
-            <Link className="btn secondary" to="/admin/sso">⚙️ تنظیمات ورود یکپارچه (SSO)</Link>
-            <Link className="btn secondary" to="/admin">📊 شاخص‌ها</Link>
-          </div>
-        )}
       </div>
 
       {metrics && (
-        <div className="grid cols-4">
-          <StatusCard label="کل درخواست‌ها" num={metrics.requests_total} />
-          <StatusCard label="پروژه‌های فعال" num={metrics.projects_active} />
-          <StatusCard label="اعلام‌های آمادگی فعال" num={metrics.offers_active} />
-          <StatusCard label="اساتید همکار" num={metrics.professors} />
+        <div className="stats-strip">
+          <StatTile icon="🗂️" bg="var(--sky-light)" label="کل درخواست‌ها" num={metrics.requests_total} />
+          <StatTile icon="🚀" label="پروژه‌های فعال" num={metrics.projects_active} />
+          <StatTile icon="📨" bg="var(--amber-light)" label="اعلام‌های آمادگی فعال" num={metrics.offers_active} />
+          <StatTile icon="👨‍🏫" bg="var(--violet-light)" label="اساتید همکار" num={metrics.professors} />
         </div>
       )}
 
