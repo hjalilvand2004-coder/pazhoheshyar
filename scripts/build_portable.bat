@@ -61,17 +61,20 @@ if exist "%PKG%" rmdir /s /q "%PKG%"
 mkdir "%PKG%" || goto :err
 copy /y "backend\dist\pazhoheshyar360-server.exe" "%PKG%\" >nul || goto :err
 copy /y "%ROOT%\scripts\START-WINDOWS.bat" "%PKG%\" >nul || goto :err
+copy /y "%ROOT%\scripts\SERVICE-WINDOWS.bat" "%PKG%\" >nul || goto :err
 copy /y "%ROOT%\README.md" "%PKG%\" >nul 2>nul
 (
   echo پژوهشیار۳۶۰ - نسخه اجرایی مستقل ویندوز
   echo ========================================
   echo ۱. روی START-WINDOWS.bat دابل‌کلیک کنید ^(یا خود فایل pazhoheshyar360-server.exe^).
-  echo ۲. در مرورگر آدرس http://localhost:8000 را باز کنید.
+  echo ۲. در مرورگر آدرس http://localhost:8088 را باز کنید (پورت پیش‌فرض).
   echo ۳. حساب‌های آزمایشی: student1 / prof1 / manager1 / admin1  - رمز همه: 12345678
   echo ۴. داده‌ها در پوشه data کنار همین فایل‌ها ذخیره می‌شود؛ برای انتقال کامل، کل پوشه را کپی کنید.
-  echo ۵. پورت پیش‌فرض 8000 است؛ برای تغییر:  set PORT=8080  سپس اجرای فایل exe.
+  echo ۵. پورت پیش‌فرض 8088 است؛ برای تغییر در PowerShell:  $env:PORT="8090"  سپس اجرای START-WINDOWS.bat.
+  echo ۶. شروع خودکار پس از ری‌استارت سرور: راهنمای SERVICE-WINDOWS.bat و دستور schtasks.
   echo.
-  echo ورود یکپارچه ^(SSO^): از منوی مدیریت ^> تنظیمات SSO، مقادیر Keycloak را وارد و فعال کنید.
+  echo ورود یکپارچه ^(SSO^): پیش‌فرض روی پرتال دانشجویار۳۶۰ تنظیم است (188.212.96.235:8086)؛
+  echo بازبینی از منوی مدیریت ^> تنظیمات SSO.
 ) > "%PKG%\راهنمای-اجرا.txt"
 powershell -NoProfile -Command "Compress-Archive -Path '%PKG%' -DestinationPath '%ROOT%\dist\Pazhoheshyar360-Windows.zip' -Force" || goto :err
 

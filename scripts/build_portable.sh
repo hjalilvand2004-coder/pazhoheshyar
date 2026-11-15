@@ -10,4 +10,4 @@ echo "==> 3/4 بسته‌بندی با PyInstaller"
 python3 -m PyInstaller PazhoheshYar.spec --noconfirm
 echo "==> 4/4 اتمام"
 echo "فایل اجرایی: backend/dist/pazhoheshyar360-server"
-echo "اجرا: ./dist/pazhoheshyar360-server  سپس مرورگر: http://localhost:8000"
+echo "اجرا: ./dist/pazhoheshyar360-server  سپس مرورگر: http://localhost:8088"
