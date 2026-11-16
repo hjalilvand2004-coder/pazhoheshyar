@@ -141,7 +141,14 @@ def sso_login(request: Request, token: str = "", db: Session = Depends(get_db)):
     """گام ۲ سند: تولید state/nonce/code_verifier، ذخیره در کوکی HttpOnly، ریدایرکت 302 به پرتال.
 
     اگر توکن محلی ارسال شود، پس از بازگشت، هویت SSO به همان حساب متصل می‌شود (اتصال حساب از پروفایل).
+    مقاوم‌سازی: اگر پرتال به‌جای callback، کد را به همین «آدرس ورود» ثبت‌شده برگرداند،
+    همین مسیر جریان را کامل می‌کند تا هر تنظیمی در پنل پرتال، ورود را نمی‌شکند.
     """
+    qp = request.query_params
+    if qp.get("code") or qp.get("error"):
+        return _sso_complete(request, code=qp.get("code", ""), state=qp.get("state", ""),
+                             error=qp.get("error", ""), db=db)
+
     s = get_settings(db)
     if not s.enabled:
         log_event(db, "sso_error", None, {"code": "disabled", "ip": _client_ip(request)})
@@ -186,6 +193,10 @@ def sso_login(request: Request, token: str = "", db: Session = Depends(get_db)):
 @router.get("/sso/callback", summary="بازگشت از پرتال — اعتبارسنجی کامل id_token و صدور نشست محلی")
 def sso_callback(request: Request, code: str = "", state: str = "", error: str = "",
                  db: Session = Depends(get_db)):
+    return _sso_complete(request, code=code, state=state, error=error, db=db)
+
+
+def _sso_complete(request: Request, code: str, state: str, error: str, db: Session):
     """گام‌های ۳ تا ۵ سند: تطابق state (کوکی)، تبادل کد با PKCE در سمت سرور،
     اعتبارسنجی RS256/iss/aud/nonce/exp/iat/sub، سپس پرووژنینگ حساب محلی."""
     s = get_settings(db)

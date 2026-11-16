@@ -45,6 +45,9 @@ export default function Dashboard() {
   return (
     <>
       <div className="dash-hero">
+        <span className="deco d1">✨</span>
+        <span className="deco d2">📚</span>
+        <span className="deco d3">🚀</span>
         <div className="dash-hero-in">
           <div className="icon-big">👋</div>
           <div>

@@ -87,9 +87,12 @@ export default function Layout({ children }) {
         ))}
         <div className="spacer" />
         <div className="userbox">
-          <b>{user.display_name}</b>
-          {user.role_labels?.join('، ')}
-          {user.sso_linked && <div className="sso-tag">🔗 متصل به SSO</div>}
+          <span className="avatar">{(user.display_name || '؟').trim().charAt(0)}</span>
+          <div>
+            <b>{user.display_name}</b>
+            {user.role_labels?.join('، ')}
+            {user.sso_linked && <div className="sso-tag">🔗 متصل به SSO</div>}
+          </div>
         </div>
         <button className="logout" onClick={async () => { const end = await logout(); if (!end) nav('/login') }}>خروج از حساب</button>
       </aside>
@@ -100,7 +103,7 @@ export default function Layout({ children }) {
         </header>
         <main className="content" key={loc.pathname}>{children}</main>
         <footer className="footer">
-          پژوهشیار۳۶۰ — نسخه ۱.۰.۵ | بخشی از اکوسیستم دانشجو۳۶۰ | داده‌های نمایشی صریحاً «آزمایشی» برچسب خورده‌اند
+          <span>پژوهشیار۳۶۰ — نسخه ۱.۰.۶ | بخشی از اکوسیستم دانشجو۳۶۰ | داده‌های نمایشی صریحاً «آزمایشی» برچسب خورده‌اند</span>
         </footer>
       </div>
     </div>

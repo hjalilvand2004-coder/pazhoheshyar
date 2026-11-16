@@ -470,3 +470,30 @@ def test_14_initial_defaults_when_nothing_exists(client, idp_base_url):
     assert pub["client_type"] == "public"
     # بازگردانی تنظیمات ماک برای سایر تست‌ها
     configure_sso(client, login(client, "admin1"))
+
+
+def test_06_code_returned_to_entry_point_completes_flow(client, idp_base_url):
+    """مقاوم‌سازی استقرار: اگر پرتال کد را به همان «آدرس ورود» ثبت‌شده (sso/login)
+    برگرداند — نه مسیر callback — همان‌جا جریان کامل می‌شود و نشست صادر می‌شود."""
+    r = client.get("/api/v1/auth/sso/login", follow_redirects=False)
+    assert r.status_code == 302
+    authorize_url = r.headers["location"]
+    r2 = httpx.get(authorize_url, follow_redirects=False, timeout=10)
+    assert r2.status_code == 302, f"authorize_url={authorize_url} status={r2.status_code} body={r2.text[:200]}"
+    qs = parse_qs(urlparse(r2.headers["location"]).query)
+    code, state = qs["code"][0], qs["state"][0]
+
+    done = client.get(f"/api/v1/auth/sso/login?code={code}&state={state}")
+    assert done.status_code == 200, done.text
+    data = done.json()
+    assert data["user"]["sso_linked"] is True
+    assert data["user"]["username"] == "ali.rezaei"
+    assert data["token"]
+
+    # کد/state تک‌مصرف‌اند — پخش دوباره روی همان مسیر هم رد می‌شود
+    replay = client.get(f"/api/v1/auth/sso/login?code={code}&state={state}")
+    assert replay.status_code == 400
+
+    # خطای صریح پرتال (لغو کاربر) روی مسیر ورود هم پیام خوانا می‌دهد
+    denied = client.get("/api/v1/auth/sso/login?error=access_denied")
+    assert denied.status_code == 400 and "لغو" in denied.json()["detail"]

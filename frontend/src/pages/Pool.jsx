@@ -74,6 +74,9 @@ export default function Pool() {
       {err && <div className="error-box">{err}</div>}
 
       <div className="pool-hero">
+        <span className="deco d1">✨</span>
+        <span className="deco d2">🎓</span>
+        <span className="deco d3">🔍</span>
         <div className="pool-hero-in">
           <div className="icon-big">🌊</div>
           <div>
