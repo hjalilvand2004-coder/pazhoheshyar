@@ -39,6 +39,7 @@ from .services.profiles import router as profiles_router      # noqa: E402
 from .services.projects import router as projects_router      # noqa: E402
 from .services.registry import router as registry_router      # noqa: E402
 from .services.requests import router as requests_router      # noqa: E402
+from .services.semantic_api import router as semantic_router  # noqa: E402
 from .services.topics import router as topics_router          # noqa: E402
 
 app.include_router(auth_router)
@@ -55,6 +56,7 @@ app.include_router(events_router)
 app.include_router(ai_router)
 app.include_router(admin_router)
 app.include_router(registry_router)
+app.include_router(semantic_router)
 
 
 @app.on_event("startup")

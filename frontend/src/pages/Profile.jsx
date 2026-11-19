@@ -10,11 +10,13 @@ export default function Profile() {
   const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
   const [sso, setSso] = useState({ enabled: false })
+  const [sem, setSem] = useState(null)
 
   useEffect(() => {
     api('/profiles/me').then(setP).catch(e => setErr(e.message))
     api('/auth/sso/config').then(setSso).catch(() => {})
-  }, [])
+    api(`/semantic/entities/by-user/${user?.id}`).then(setSem).catch(() => {})
+  }, [user?.id])
 
   if (!p) return <div className="empty">در حال بارگذاری… {err && <div className="error-box">{err}</div>}</div>
   const isProfessor = hasRole('professor')
@@ -111,6 +113,25 @@ export default function Profile() {
         )}
         <button className="btn" style={{ marginTop: 14 }} onClick={save}>ذخیره پروفایل</button>
       </div>
+
+      {sem && (
+        <div className="card">
+          <h3>🧠 پیوندهای معنایی شما</h3>
+          <div className="hint">
+            موجودیت شما در شبکهٔ دانش با شناسهٔ پایدار و منشأ ثبت شده است — نسخهٔ نما: {sem.version}
+          </div>
+          {sem.top_links?.length > 0 && (
+            <div className="skill-chips" style={{ marginTop: 8 }}>
+              {sem.top_links.map((l, i) => (
+                <span className="skill-chip" key={i}>{l.name} · {l.pred_fa}</span>
+              ))}
+            </div>
+          )}
+          <div className="row" style={{ marginTop: 10 }}>
+            <a className="btn small secondary" href="/semantic">مشاهده در شبکهٔ دانش ←</a>
+          </div>
+        </div>
+      )}
 
       <div className="card">
         <h3>🔗 حساب دانشگاهی (SSO)</h3>

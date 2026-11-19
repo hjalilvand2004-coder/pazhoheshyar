@@ -9,13 +9,33 @@ export default function Admin() {
   const [events, setEvents] = useState([])
   const [users, setUsers] = useState([])
   const [err, setErr] = useState('')
+  const [semQ, setSemQ] = useState(null)
+  const [semMsg, setSemMsg] = useState('')
 
   const load = () => {
     api('/admin/metrics').then(setMetrics).catch(e => setErr(e.message))
     api('/events?limit=60').then(setEvents).catch(() => {})
     api('/admin/users').then(setUsers).catch(() => {})
+    api('/semantic/admin/quality').then(setSemQ).catch(() => {})
   }
   useEffect(load, [])
+
+  const semAction = async (path, body, okMsg) => {
+    setSemMsg('')
+    try {
+      const r = body ? await api(path, { method: 'POST', body }) : await api(path, { method: 'POST' })
+      setSemMsg(okMsg + ' — ' + JSON.stringify(r).slice(0, 140))
+      load()
+    } catch (e) { setSemMsg('خطا: ' + e.message) }
+  }
+  const decideCase = async (id, decision) => {
+    setSemMsg('')
+    try {
+      await api(`/semantic/resolution-cases/${id}/decisions`, { method: 'POST', body: { decision, reason: decision === 'merge' ? 'ادغام توسط متولی داده' : 'افراد متفاوت‌اند' } })
+      setSemMsg(decision === 'merge' ? 'ادغام انجام شد (قابل تفکیک است)' : 'پرونده به‌صورت «تفکیک» بسته شد')
+      load()
+    } catch (e) { setSemMsg('خطا: ' + e.message) }
+  }
 
   const isSysAdmin = hasRole('system_admin')
   const ROLE_LABELS = { student: 'دانشجو', professor: 'استاد', research_manager: 'مدیر پژوهش', system_admin: 'مدیر سامانه' }
@@ -72,6 +92,50 @@ export default function Admin() {
           </tbody>
         </table>
       </div>
+
+      {semQ && (
+        <div className="card">
+          <h3>🕸️ کیفیت دادهٔ لایه معنایی (متولی داده)</h3>
+          <div className="grid cols-4">
+            <div className="stat"><div className="num">{Object.values(semQ.entities || {}).reduce((a, b) => a + b, 0)}</div><div className="lbl">موجودیت در دفتر ثبت</div></div>
+            <div className="stat"><div className="num">{Object.values(semQ.claims_by_origin || {}).reduce((a, b) => a + b, 0)}</div><div className="lbl">ادعای رابطه</div></div>
+            <div className="stat"><div className="num">{semQ.claims_by_origin?.inferred || 0}</div><div className="lbl">ادعای استنتاجی (قابل ابطال)</div></div>
+            <div className="stat"><div className="num">{semQ.pending_resolution_cases}</div><div className="lbl">پروندهٔ تطبیق در انتظار داوری</div></div>
+          </div>
+          <div className="hint" style={{ marginTop: 8 }}>
+            نسخهٔ دفتر ثبت: <code>{semQ.projection?.registry_version}</code> — نما: {semQ.projection?.is_stale ? 'کهنه (نیاز به بازسازی)' : 'به‌روز'} — واژگان: {semQ.vocab_version}
+          </div>
+          <div className="row" style={{ marginTop: 8 }}>
+            <button className="btn small secondary" onClick={() => semAction('/semantic/projection/rebuild', null, 'نمای گراف بازسازی شد')}>بازسازی نما از دفتر ثبت</button>
+            <button className="btn small secondary" onClick={() => semAction('/semantic/integration-runs', null, 'ورود داده اجرا شد')}>اجرای یکپارچه‌سازی</button>
+            <button className="btn small secondary" onClick={() => semAction('/semantic/inference-runs?rule=R1', null, 'استنتاج R1 اجرا شد')}>استنتاج R1 (شواهد موضوعی)</button>
+            <button className="btn small secondary" onClick={() => semAction('/semantic/inference-runs?rule=R2', null, 'استنتاج R2 اجرا شد')}>استنتاج R2 (نامزد همکاری)</button>
+          </div>
+          {semMsg && <div className="ok-box">{semMsg}</div>}
+          {semQ.conflicts?.length > 0 && (
+            <div style={{ marginTop: 10 }}>
+              <h3 style={{ fontSize: 14 }}>تعارض منابع (حل‌نشده — هر دو ادعا با منشأ نگه داشته شده)</h3>
+              {semQ.conflicts.map((c, i) => (
+                <div className="tl-item" key={i}>
+                  <b>{c.subject}</b> — <span className="field-chip">{c.predicate_fa}</span>
+                  {c.options?.map((o, j) => (
+                    <div className="hint" key={j}>مقدار «{o.object}» از منبع {o.source_system}</div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+          {semQ.pending_resolution_cases > 0 && (
+            <div style={{ marginTop: 10 }}>
+              <h3 style={{ fontSize: 14 }}>پرونده‌های تطبیق موجودیت</h3>
+              <div className="hint" style={{ marginBottom: 6 }}>پرونده‌های در انتظار از طریق فهرست پرونده‌ها تصمیم‌گیری می‌شوند (ادغام/تفکیک، هر دو قابل بازگشت).</div>
+              <button className="btn small ghost" onClick={async () => { try { setSemMsg('پرونده‌ها: ' + JSON.stringify(await api('/semantic/resolution-cases?status=pending')).slice(0, 300)) } catch (e) { setSemMsg('خطا: ' + e.message) } }}>
+                فهرست پرونده‌های در انتظار
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="card">
         <h3>👥 کاربران {isSysAdmin && '(مدیر سامانه: نقش‌ها قابل ویرایش است)'}</h3>

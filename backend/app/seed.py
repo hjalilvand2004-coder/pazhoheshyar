@@ -1,7 +1,7 @@
 """داده آزمایشی — صریحاً برچسب‌گذاری‌شده؛ هیچ‌کدام اتصال واقعی یا هوش مصنوعی عملیاتی نیست"""
 from .core.security import hash_password
 from .core.utils import log_event
-from .models import Agreement, Conversation, Message, Offer, ResearchProfile, ResearchRequest, SsoSettings, Topic, User
+from .models import Agreement, Conversation, EventLog, Message, Offer, ResearchProfile, ResearchRequest, SsoSettings, Topic, User
 
 DEMO_LABEL = "داده آزمایشی"
 
@@ -114,4 +114,33 @@ def seed(db) -> None:
         db.add(row)
         db.commit()
         mirror_write(row)  # فایل آینه از همان ابتدا پایدار می‌شود
+
+    # ---------- لایه معنایی و گراف دانش: یکپارچه‌سازی اولیه + استنتاج + نمونه‌های حاکمیت ----------
+    # فقط در بار نخست (بر پایهٔ دفتر ثبت خالی) — بازسازی بعدی از مسیرهای مدیریتی انجام می‌شود.
+    from .models import SemanticEntity, SourceRecord
+    if not db.query(SemanticEntity).count():
+        from .services import semantic as sem
+        sem.run_integration(db)                       # ساخت دفتر ثبت معتبر از دادهٔ مرجع
+        # تعارض منبع نمونه (hr-import): وابستگی متفاوت برای یک استاد — هر دو ادعا با منشأ می‌مانند
+        src2 = SourceRecord(id=sem._uuid(), source_system="hr-import", record_type="staff-affiliation",
+                            external_id="hr-2026-041", raw={"note": "نمونهٔ تعارض برای پنل متولی داده"})
+        db.add(src2)
+        db.flush()
+        prof_p = db.query(SemanticEntity).filter(
+            SemanticEntity.ref_table == "users", SemanticEntity.ref_id == str(p1.id)).one_or_none()
+        if prof_p:
+            unit2 = sem.get_or_create_entity(db, "AcademicUnit", "دانشکده کامپیوتر و مهندسی",
+                                             ref_table="academic_units", ref_id="hr-comp-eng")
+            sem.assert_relation(db, prof_p, "MEMBER_OF", unit2, source_system="hr-import",
+                                source_record_id=src2.id)
+        # نمونهٔ تطبیق: شخص وارداتی با نام مشابه (شاهد کمکی — نیازمند داوری انسانی)
+        dup = sem.get_or_create_entity(db, "Person", "مریم احمدی نیک", ref_table="hr-import", ref_id="hr-77120",
+                                       summary="واردات آزمایشی از منبع منابع انسانی")
+        sem.add_identifier(db, dup, "hr_id", "77120", source_system="hr-import")
+        sem.run_inference(db, "R1")                   # شواهد پژوهش موضوعی (استنتاجی، ابطال‌پذیر)
+        sem.run_inference(db, "R2")                   # نامزدهای همکاری از اشتراک مفاهیم
+        sem.create_resolution_cases(db)               # پروندهٔ تطبیق در انتظار داوری متولی داده
+        db.add(EventLog(type="semantic_outbox", payload={
+            "event": "bootstrap_completed", "label": DEMO_LABEL,
+            "note": "دفتر ثبت معتبر ساخته شد؛ نمای گرافی فقط از همین دفتر بازسازی می‌شود."}))
     db.commit()

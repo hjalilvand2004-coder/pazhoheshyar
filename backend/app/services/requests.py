@@ -88,7 +88,15 @@ def pool(q: str = "", field: str = "", skill: str = "", status: str = "",
             continue
         if status and req.status != status:
             continue
-        out.append(ser_request(req, stu))
+        item = ser_request(req, stu)
+        # شواهد برازش معنایی — برای استادها: چرا این درخواست مرتبط است؟ (ثبت در گراف نمی‌شود)
+        if "professor" in (user.roles or []):
+            try:
+                from . import semantic as sem
+                item["semantic_evidence"] = sem.match_evidence(db, user, req)
+            except Exception:
+                item["semantic_evidence"] = {}
+        out.append(item)
     return out
 
 

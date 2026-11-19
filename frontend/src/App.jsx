@@ -14,6 +14,7 @@ import Chat from './pages/Chat.jsx'
 import Projects from './pages/Projects.jsx'
 import ProjectDetail from './pages/ProjectDetail.jsx'
 import AiAssistant from './pages/AiAssistant.jsx'
+import Semantic from './pages/Semantic.jsx'
 import Admin from './pages/Admin.jsx'
 import SsoSettings from './pages/SsoSettings.jsx'
 
@@ -40,6 +41,7 @@ export default function App() {
         <Route path="/projects" element={<Protected><Projects /></Protected>} />
         <Route path="/projects/:id" element={<Protected><ProjectDetail /></Protected>} />
         <Route path="/ai" element={<Protected><AiAssistant /></Protected>} />
+        <Route path="/semantic" element={<Protected><Semantic /></Protected>} />
         <Route path="/admin" element={<Protected><Admin /></Protected>} />
         <Route path="/admin/sso" element={<Protected><SsoSettings /></Protected>} />
         <Route path="*" element={<Navigate to="/" replace />} />

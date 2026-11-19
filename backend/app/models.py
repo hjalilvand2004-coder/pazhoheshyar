@@ -265,3 +265,144 @@ class AiSuggestionLog(Base):
     input_json = Column(JSON, default=dict)
     output_json = Column(JSON, default=dict)
     created_at = Column(DateTime(timezone=True), default=now_utc)
+
+
+# ============================================================
+# لایه معنایی و گراف دانش — دفتر ثبت معتبر (بخش ۱۱.۳ سند):
+# PostgreSQL/SQLite اینجا «منبع حقیقت» است؛ نمای گرافی فقط
+# قابل بازسازی از همین دفتر است و هرگز خودش مرجع نمی‌شود.
+# ============================================================
+
+class SemanticEntity(Base):
+    """موجودیت معنایی — با شناسه پایدار UUID و پیوند به رکورد مرجع (ref_table/ref_id).
+
+    سامانه‌های مرجع مالک داده‌اند؛ اینجا فقط تصویر نسخه‌دار و قابل ردیابی نگه داشته می‌شود.
+    """
+    __tablename__ = "semantic_entities"
+    id = Column(String(36), primary_key=True)          # UUID پایدار
+    kind = Column(String(30), nullable=False, index=True)  # Person | Organization | AcademicUnit | Skill | Concept | Topic | ResearchRequest | ResearchProject | Publication
+    ref_table = Column(String(60), default="")          # جدول سامانه مرجع (خالی برای مفاهیم واژگانی)
+    ref_id = Column(String(60), default="")             # شناسه در سامانه مرجع
+    display_name = Column(String(300), nullable=False)
+    display_name_norm = Column(String(300), default="", index=True)
+    summary = Column(Text, default="")
+    status = Column(String(20), default="active", index=True)  # active | merged | archived
+    merged_into = Column(String(36), nullable=True)     # ادغام — اشاره به موجودیت کانونی
+    meta = Column(JSON, default=dict)                   # ویژگی‌های تکمیلی نسخه‌دار
+    updated_at = Column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+    created_at = Column(DateTime(timezone=True), default=now_utc)
+
+
+class EntityIdentifier(Base):
+    """شناسه موجودیت در منابع مختلف — شواهد قوی تطبیق (ORCID، DOI، شناسه مرجع، …)."""
+    __tablename__ = "entity_identifiers"
+    id = Column(Integer, primary_key=True)
+    entity_id = Column(String(36), ForeignKey("semantic_entities.id"), nullable=False, index=True)
+    scheme = Column(String(40), nullable=False)         # portal_uid | orcid | doi | hr_id | internal
+    value = Column(String(400), nullable=False, index=True)
+    source_system = Column(String(80), default="")
+    confidence = Column(Float, default=1.0)
+    created_at = Column(DateTime(timezone=True), default=now_utc)
+
+
+class RelationAssertion(Base):
+    """ادعای رابطه — با منشأ، اعتبار، اطمینان، سیاست دسترسی و وضعیت داوری (بخش ۳.۳ سند).
+
+    origin: asserted (رسمی از مرجع) | extracted (استخراج از متن) | inferred (استنتاج قاعده/الگوریتم)
+    روابط استنتاجی با رابطه رسمی اشتباه گرفته نمی‌شوند و قابل حذف/محاسبهٔ مجددند.
+    """
+    __tablename__ = "relation_assertions"
+    id = Column(String(36), primary_key=True)           # UUID
+    subject_entity_id = Column(String(36), ForeignKey("semantic_entities.id"), nullable=False, index=True)
+    predicate_code = Column(String(40), nullable=False, index=True)
+    object_entity_id = Column(String(36), ForeignKey("semantic_entities.id"), nullable=False, index=True)
+    origin = Column(String(12), nullable=False, default="asserted")
+    source_system = Column(String(80), default="pazhoheshyar-core")
+    source_record_id = Column(String(36), nullable=True)   # پیوند به SourceRecord
+    evidence_ref = Column(JSON, default=list)           # شواهد مسیر/رکورد (بدون محتوای حساس)
+    confidence = Column(Float, nullable=True)
+    valid_from = Column(DateTime(timezone=True), nullable=True)
+    valid_to = Column(DateTime(timezone=True), nullable=True)
+    observed_at = Column(DateTime(timezone=True), default=now_utc)
+    access_policy = Column(String(20), default="public")   # public | internal | restricted
+    rule_or_model_version = Column(String(60), default="")
+    review_status = Column(String(20), default="approved")  # approved | pending | rejected
+    payload = Column(JSON, default=dict)                # نقش، ترتیب نویسندگی، …
+    created_at = Column(DateTime(timezone=True), default=now_utc)
+
+
+class SemanticConcept(Base):
+    """واژگان کنترل‌شده (SKOS-سازگار): شناسه پایدار، نام دوزبانه، مترادف، سلسله‌مراتب، نسخه."""
+    __tablename__ = "semantic_concepts"
+    id = Column(String(36), primary_key=True)
+    name_fa = Column(String(200), nullable=False)
+    name_en = Column(String(200), default="")
+    definition = Column(Text, default="")
+    synonyms = Column(JSON, default=list)               # مترادف‌ها (فارسی/انگلیسی/اختصار)
+    broader_id = Column(String(36), nullable=True)      # مفهوم بالادست
+    status = Column(String(20), default="approved")     # approved | draft
+    version = Column(String(20), default="voc-1.0.0")
+    source_system = Column(String(80), default="pazhoheshyar-core")
+    created_at = Column(DateTime(timezone=True), default=now_utc)
+
+
+class SourceRecord(Base):
+    """رکورد خام دریافتی — ثبت منشأ پیش از هر تبدیل (گام ۲ خط پردازش، بخش ۵.۱ سند)."""
+    __tablename__ = "source_records"
+    id = Column(String(36), primary_key=True)
+    source_system = Column(String(80), nullable=False)  # pazhoheshyar-core | hr-import | portal | …
+    record_type = Column(String(60), default="")
+    external_id = Column(String(200), default="")
+    raw = Column(JSON, default=dict)                    # بار خام (بدون فیلد حساسِ غیرضروری)
+    received_at = Column(DateTime(timezone=True), default=now_utc)
+
+
+class ResolutionCase(Base):
+    """پرونده تطبیق موجودیت — تصمیم سه‌سطحی: خودکار (شواهد بسیار قوی) | انسانی | عدم تطبیق."""
+    __tablename__ = "resolution_cases"
+    id = Column(Integer, primary_key=True)
+    entity_a_id = Column(String(36), ForeignKey("semantic_entities.id"), nullable=False)
+    entity_b_id = Column(String(36), ForeignKey("semantic_entities.id"), nullable=False)
+    score = Column(Float, default=0.0)
+    evidence = Column(JSON, default=list)               # فهرست شواهد و دلیل امتیاز
+    decision = Column(String(20), default="pending", index=True)  # pending | merged | separate | auto_merged
+    decided_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    decided_at = Column(DateTime(timezone=True), nullable=True)
+    reason = Column(Text, default="")
+    created_at = Column(DateTime(timezone=True), default=now_utc)
+
+
+class MergeOperation(Base):
+    """تاریخچه ادغام و تفکیک — ادغام قابل بازگشت است (بخش ۵.۳ سند)."""
+    __tablename__ = "merge_operations"
+    id = Column(Integer, primary_key=True)
+    case_id = Column(Integer, nullable=True)
+    canonical_entity_id = Column(String(36), nullable=False)
+    absorbed_entity_id = Column(String(36), nullable=False)
+    action = Column(String(20), default="merge")        # merge | separate
+    payload = Column(JSON, default=dict)                # نگاشت رکوردهای منتقل‌شده برای تفکیک
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=now_utc)
+
+
+class InferenceRun(Base):
+    """اجرای قاعدهٔ استنتاج — نسخه‌دار، آمارپذیر و ابطال‌پذیر (بخش ۶.۱ سند)."""
+    __tablename__ = "inference_runs"
+    id = Column(String(36), primary_key=True)
+    rule_code = Column(String(40), nullable=False)
+    rule_version = Column(String(40), default="")
+    status = Column(String(20), default="completed")    # completed | failed | disabled
+    stats = Column(JSON, default=dict)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=now_utc)
+
+
+class IntegrationRun(Base):
+    """اجرای ورود داده از منبع — وضعیت و آمار برای پایش عقب‌ماندگی همگام‌سازی."""
+    __tablename__ = "integration_runs"
+    id = Column(String(36), primary_key=True)
+    source_system = Column(String(80), nullable=False)
+    status = Column(String(20), default="completed")
+    stats = Column(JSON, default=dict)
+    created_at = Column(DateTime(timezone=True), default=now_utc)
+

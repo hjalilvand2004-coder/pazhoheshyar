@@ -61,6 +61,7 @@ const MENUS = [
   { to: '/chat', label: 'گفت‌وگوها', ic: '💬', roles: ['student', 'professor'] },
   { to: '/projects', label: 'پروژه‌های من', ic: '🗂️', roles: ['student', 'professor', 'research_manager', 'system_admin'] },
   { to: '/ai', label: 'دستیار هوشمند', ic: '🤖', roles: ['student', 'professor', 'research_manager'] },
+  { to: '/semantic', label: 'شبکهٔ دانش', ic: '🕸️', roles: ['student', 'professor', 'research_manager', 'system_admin'] },
   { to: '/admin', label: 'داشبورد مدیریت پژوهش', ic: '📊', roles: ['research_manager', 'system_admin'] },
   { to: '/admin/sso', label: 'تنظیمات ورود یکپارچه', ic: '🔐', roles: ['system_admin'] },
   { to: '/profile', label: 'پروفایل پژوهشی', ic: '👤', roles: ['student', 'professor', 'research_manager', 'system_admin'] },
@@ -103,7 +104,7 @@ export default function Layout({ children }) {
         </header>
         <main className="content" key={loc.pathname}>{children}</main>
         <footer className="footer">
-          <span>پژوهشیار۳۶۰ — نسخه ۱.۰.۶ | بخشی از اکوسیستم دانشجو۳۶۰ | داده‌های نمایشی صریحاً «آزمایشی» برچسب خورده‌اند</span>
+          <span>پژوهشیار۳۶۰ — نسخه ۱.۱.۰ | بخشی از اکوسیستم دانشجو۳۶۰ | داده‌های نمایشی صریحاً «آزمایشی» برچسب خورده‌اند</span>
         </footer>
       </div>
     </div>

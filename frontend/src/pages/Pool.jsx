@@ -154,6 +154,12 @@ export default function Pool() {
                 <span>🕐 {fmtDateTime(r.updated_at)}</span>
                 {r.timeline && <span>⏱️ {r.timeline}</span>}
               </div>
+              {r.semantic_evidence && r.semantic_evidence.score > 0 && (
+                <div className="hint" style={{ fontSize: 11 }}>
+                  🧠 چرا مرتبط؟ {r.semantic_evidence.why?.join(' • ') || `مفاهیم مشترک: ${r.semantic_evidence.shared?.join('، ') || '—'}`}
+                  {r.semantic_evidence.path && <div style={{ marginTop: 2, opacity: .8 }}>🛤️ مسیر: {r.semantic_evidence.path}</div>}
+                </div>
+              )}
               <Link className="btn small" to={`/requests/${r.id}`}>مشاهده و اعلام آمادگی ←</Link>
             </div>
           ))}
