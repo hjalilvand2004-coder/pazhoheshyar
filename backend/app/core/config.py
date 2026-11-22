@@ -58,7 +58,7 @@ OFFER_DAILY_LIMIT = int(os.environ.get("OFFER_DAILY_LIMIT", "20"))
 SEED_ON_START = os.environ.get("SEED_ON_START", "1") == "1"
 
 APP_NAME = "پژوهشیار۳۶۰"
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.3.0"
 SSO_ISSUER_LABEL = "daneshjoo360-sso"
 
 # ------------------------------------------------ پرتال ورود یکپارچهٔ دانشجویار۳۶۰ (طبق سند ادغام رسمی)

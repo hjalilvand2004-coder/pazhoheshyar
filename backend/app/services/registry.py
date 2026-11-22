@@ -65,6 +65,18 @@ SERVICES = [
                    "POST /api/v1/research/docs/{id}/references", "GET /api/v1/research/docs/{id}/references/formatted",
                    "GET /api/v1/research/docs/{id}/export?format=tex|html|docx",
                    "POST /api/v1/research/docs/{id}/publish"]},
+    {"module": "lab", "title": "آزمایشگاه شبیه‌سازی پژوهش",
+     "description": "دیتاست CSV/XLSX با تشخیص خودکار نوع ستون‌ها؛ کاوش توصیفی، همبستگی پیرسون/اسپیرمن،"
+                    " پراکندگی، کای‌دو و ANOVA؛ شبیه‌سازی مدل‌های رگرسیون، طبقه‌بندی و خوشه‌بندی"
+                    " با سنجه‌ها، نمودارها، مقایسهٔ آزمایش‌ها، پیش‌بینی تک‌ردیفی و درج نتایج در سند پژوهش",
+     "endpoints": ["GET /api/v1/lab/meta", "POST /api/v1/lab/datasets", "GET /api/v1/lab/datasets",
+                   "GET /api/v1/lab/datasets/{id}", "DELETE /api/v1/lab/datasets/{id}",
+                   "GET /api/v1/lab/datasets/{id}/profile", "GET /api/v1/lab/datasets/{id}/correlations",
+                   "GET /api/v1/lab/datasets/{id}/scatter", "GET /api/v1/lab/datasets/{id}/crosstab",
+                   "GET /api/v1/lab/datasets/{id}/anova", "POST /api/v1/lab/experiments",
+                   "GET /api/v1/lab/experiments", "GET /api/v1/lab/experiments/{id}",
+                   "DELETE /api/v1/lab/experiments/{id}", "POST /api/v1/lab/experiments/{id}/predict",
+                   "POST /api/v1/lab/experiments/{id}/attach-doc"]},
     {"module": "files", "title": "فایل امن", "description": "دانلود با کنترل دسترسی و نام ذخیره غیرقابل حدس",
      "endpoints": ["GET /api/v1/files/{id}"]},
     {"module": "notifications", "title": "اعلان‌ها", "description": "اعلان داخلی کاربران",

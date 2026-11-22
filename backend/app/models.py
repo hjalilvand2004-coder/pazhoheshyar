@@ -496,3 +496,50 @@ class DocReference(Base):
     added_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), default=now_utc)
 
+
+# ============================================================
+# آزمایشگاه شبیه‌سازی پژوهش — دیتاست، کاوش متغیرها و شبیه‌سازی مدل‌ها
+# (رگرسیون، طبقه‌بندی، خوشه‌بندی) با نمودار و ثبت آزمایش‌ها
+# ============================================================
+
+class LabDataset(Base):
+    """دیتاست پژوهش — بارگذاری CSV/XLSX با تشخیص خودکار نوع ستون‌ها.
+
+    ردیف‌ها به‌صورت JSON نگه داشته می‌شوند (دیتاست‌های پژوهشی معمولاً کوچک‌اند)؛
+    سقف‌های ورودی در services/lab.py اعمال می‌شود.
+    """
+    __tablename__ = "lab_datasets"
+    id = Column(Integer, primary_key=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    title = Column(String(300), nullable=False)
+    description = Column(Text, default="")
+    filename = Column(String(300), default="")
+    size = Column(Integer, default=0)                      # بایت
+    n_rows = Column(Integer, default=0)
+    n_cols = Column(Integer, default=0)
+    columns_meta = Column(JSON, default=list)              # [{name, dtype, n_missing, n_unique}]
+    rows = Column(JSON, default=list)                      # فهرست dict: {ستون: مقدار یا None}
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=True, index=True)
+    research_doc_id = Column(Integer, ForeignKey("research_docs.id"), nullable=True, index=True)
+    created_at = Column(DateTime(timezone=True), default=now_utc)
+
+
+class LabExperiment(Base):
+    """آزمایش شبیه‌سازی — اجرای یک مدل روی دیتاست با پارامترها؛ نتایج و دادهٔ نمودارها نگه داشته می‌شود."""
+    __tablename__ = "lab_experiments"
+    id = Column(Integer, primary_key=True)
+    dataset_id = Column(Integer, ForeignKey("lab_datasets.id"), nullable=False, index=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    title = Column(String(300), default="")
+    task = Column(String(20), nullable=False, index=True)     # regression | classification | clustering
+    model = Column(String(40), nullable=False)                # کلید مدل
+    model_fa = Column(String(120), default="")
+    target = Column(String(120), default="")                  # برای خوشه‌بندی خالی
+    features = Column(JSON, default=list)
+    params = Column(JSON, default=dict)                       # test_size, random_state, scaled, k, eps, ...
+    metrics = Column(JSON, default=dict)
+    artifacts = Column(JSON, default=dict)                    # دادهٔ نمودارها و جداول نتیجه
+    status = Column(String(20), default="completed", index=True)  # completed | failed
+    error = Column(Text, default="")
+    created_at = Column(DateTime(timezone=True), default=now_utc)
+

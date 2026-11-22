@@ -26,6 +26,25 @@ hiddenimports = [
     'uvicorn.lifespan.on',
     'sqlalchemy.dialects.sqlite',
     'jwt',
+    # آزمایشگاه شبیه‌سازی — واردات‌های داخل تابع هم دیده می‌شوند؛ این‌ها صریح شده‌اند
+    'numpy',
+    'scipy',
+    'scipy.stats',
+    'openpyxl',
+    'sklearn',
+    'sklearn.linear_model',
+    'sklearn.tree',
+    'sklearn.ensemble',
+    'sklearn.naive_bayes',
+    'sklearn.neighbors',
+    'sklearn.cluster',
+    'sklearn.decomposition',
+    'sklearn.metrics',
+    'sklearn.model_selection',
+    'sklearn.preprocessing',
+    'sklearn.utils._typedefs',
+    'sklearn.utils._sorting',
+    'sklearn.neighbors._partition_nodes',
 ]
 
 a = Analysis(
@@ -36,7 +55,7 @@ a = Analysis(
     hiddenimports=hiddenimports,
     hookspath=[],
     runtime_hooks=[],
-    excludes=['tkinter', 'matplotlib', 'numpy', 'pandas'],
+    excludes=['tkinter', 'matplotlib', 'pandas'],
     cipher=block_cipher,
 )
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)

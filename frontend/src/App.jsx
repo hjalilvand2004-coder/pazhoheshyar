@@ -14,6 +14,7 @@ import Chat from './pages/Chat.jsx'
 import Projects from './pages/Projects.jsx'
 import ProjectDetail from './pages/ProjectDetail.jsx'
 import Research from './pages/Research.jsx'
+import Lab from './pages/Lab.jsx'
 import AiAssistant from './pages/AiAssistant.jsx'
 import Semantic from './pages/Semantic.jsx'
 import Admin from './pages/Admin.jsx'
@@ -43,6 +44,7 @@ export default function App() {
         <Route path="/projects/:id" element={<Protected><ProjectDetail /></Protected>} />
         <Route path="/research" element={<Protected><Research /></Protected>} />
         <Route path="/research/:id" element={<Protected><Research /></Protected>} />
+        <Route path="/lab" element={<Protected><Lab /></Protected>} />
         <Route path="/ai" element={<Protected><AiAssistant /></Protected>} />
         <Route path="/semantic" element={<Protected><Semantic /></Protected>} />
         <Route path="/admin" element={<Protected><Admin /></Protected>} />
