@@ -406,3 +406,93 @@ class IntegrationRun(Base):
     stats = Column(JSON, default=dict)
     created_at = Column(DateTime(timezone=True), default=now_utc)
 
+
+# ============================================================
+# فضای پژوهش تیمی — نگارش مشترک سند پژوهشی با قالب‌های استاندارد
+# (IEEE کنفرانس/مجله، اسپرینگر LNCS/مقاله، APA، پایان‌نامهٔ فارسی)
+# ============================================================
+
+class ResearchDoc(Base):
+    """سند پژوهشی تیمی — دانشجو و استاد و اعضای گروه، یک سند را با نقش مشترک می‌نویسند."""
+    __tablename__ = "research_docs"
+    id = Column(Integer, primary_key=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)       # مسئول سند
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=True, index=True)   # پیوند اختیاری به پروژهٔ رسمی
+    title = Column(String(300), nullable=False)
+    language = Column(String(10), default="fa")            # fa | en
+    template = Column(String(40), default="ieee-conference", index=True)
+    status = Column(String(30), default="draft", index=True)   # draft | in_review | revised | approved | published
+    abstract = Column(Text, default="")
+    keywords = Column(JSON, default=list)
+    venue_note = Column(String(300), default="")           # مقصد ارسال (نام کنفرانس/مجله)
+    semantic_entity_id = Column(String(36), nullable=True)  # موجودیت «اثر علمی» پس از انتشار در شبکهٔ دانش
+    created_at = Column(DateTime(timezone=True), default=now_utc)
+    updated_at = Column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+
+
+class DocMember(Base):
+    """عضو فضای پژوهش — lead مسئول سند | writer نویسنده | reviewer داور | observer ناظر"""
+    __tablename__ = "doc_members"
+    id = Column(Integer, primary_key=True)
+    doc_id = Column(Integer, ForeignKey("research_docs.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    role = Column(String(20), default="writer")            # lead | writer | reviewer | observer
+    added_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    added_at = Column(DateTime(timezone=True), default=now_utc)
+    __table_args__ = (UniqueConstraint("doc_id", "user_id", name="uq_doc_member"),)
+
+
+class DocSection(Base):
+    """بخش سند — نگارش مشترک با قفل خوش‌بینانه (version_no) و نویسندهٔ مسئول هر بخش"""
+    __tablename__ = "doc_sections"
+    id = Column(Integer, primary_key=True)
+    doc_id = Column(Integer, ForeignKey("research_docs.id"), nullable=False, index=True)
+    ord = Column(Integer, default=0)                       # ترتیب در سند
+    heading = Column(String(200), default="")
+    body = Column(Text, default="")
+    guidance = Column(Text, default="")                    # راهنمای قالب برای همان بخش
+    assigned_to = Column(Integer, ForeignKey("users.id"), nullable=True)
+    updated_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    version_no = Column(Integer, default=1)                # قفل خوش‌بینانه ویرایش هم‌زمان
+    created_at = Column(DateTime(timezone=True), default=now_utc)
+    updated_at = Column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+
+
+class DocVersion(Base):
+    """نسخهٔ ثبت‌شدهٔ کل سند — عکس فوری برای تاریخچه و بازگشت"""
+    __tablename__ = "doc_versions"
+    id = Column(Integer, primary_key=True)
+    doc_id = Column(Integer, ForeignKey("research_docs.id"), nullable=False, index=True)
+    label = Column(String(200), default="")
+    snapshot = Column(JSON, default=dict)                  # بخش‌ها + انتزاع + کلیدواژه‌ها
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=now_utc)
+
+
+class DocComment(Base):
+    """گفت‌وگوی داوری روی سند/بخش — با وضعیت حل‌شده"""
+    __tablename__ = "doc_comments"
+    id = Column(Integer, primary_key=True)
+    doc_id = Column(Integer, ForeignKey("research_docs.id"), nullable=False, index=True)
+    section_id = Column(Integer, ForeignKey("doc_sections.id"), nullable=True)
+    author_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    body = Column(Text, default="")
+    resolved = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), default=now_utc)
+
+
+class DocReference(Base):
+    """مرجع کتاب‌شناختی سند — خروجی فرمت‌بندی به سه سبک IEEE/اسپرینگر/APA"""
+    __tablename__ = "doc_references"
+    id = Column(Integer, primary_key=True)
+    doc_id = Column(Integer, ForeignKey("research_docs.id"), nullable=False, index=True)
+    authors = Column(Text, default="")                     # نویسندگان به همان صورت ثبت
+    title = Column(String(400), nullable=False)
+    venue = Column(String(300), default="")                # مجله/کنفرانس
+    year = Column(String(10), default="")
+    doi = Column(String(120), default="")
+    url = Column(String(400), default="")
+    note = Column(Text, default="")
+    added_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=now_utc)
+

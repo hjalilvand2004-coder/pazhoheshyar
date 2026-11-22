@@ -60,6 +60,7 @@ const MENUS = [
   { to: '/topics', label: 'بانک موضوعات', ic: '📚', roles: ['student', 'professor', 'research_manager', 'system_admin'] },
   { to: '/chat', label: 'گفت‌وگوها', ic: '💬', roles: ['student', 'professor'] },
   { to: '/projects', label: 'پروژه‌های من', ic: '🗂️', roles: ['student', 'professor', 'research_manager', 'system_admin'] },
+  { to: '/research', label: 'فضای پژوهش', ic: '📝', roles: ['student', 'professor', 'research_manager', 'system_admin'] },
   { to: '/ai', label: 'دستیار هوشمند', ic: '🤖', roles: ['student', 'professor', 'research_manager'] },
   { to: '/semantic', label: 'شبکهٔ دانش', ic: '🕸️', roles: ['student', 'professor', 'research_manager', 'system_admin'] },
   { to: '/admin', label: 'داشبورد مدیریت پژوهش', ic: '📊', roles: ['research_manager', 'system_admin'] },

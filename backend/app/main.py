@@ -38,6 +38,8 @@ from .services.offers import router as offers_router          # noqa: E402
 from .services.profiles import router as profiles_router      # noqa: E402
 from .services.projects import router as projects_router      # noqa: E402
 from .services.registry import router as registry_router      # noqa: E402
+from .services.research import router as research_router      # noqa: E402
+from .services.research_ai import router as research_ai_router  # noqa: E402
 from .services.requests import router as requests_router      # noqa: E402
 from .services.semantic_api import router as semantic_router  # noqa: E402
 from .services.topics import router as topics_router          # noqa: E402
@@ -55,6 +57,8 @@ app.include_router(notif_router)
 app.include_router(events_router)
 app.include_router(ai_router)
 app.include_router(admin_router)
+app.include_router(research_router)
+app.include_router(research_ai_router)
 app.include_router(registry_router)
 app.include_router(semantic_router)
 
