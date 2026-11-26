@@ -64,4 +64,13 @@ def _can_access(db: Session, att: Attachment, user: User) -> bool:
         conv = db.get(Conversation, msg.conversation_id)
         if conv and user.id in (conv.student_id, conv.professor_id):
             return True
+    # پیوست گزارش کارآموزی/درس‌پروژه: دانشجوی صاحب رکورد و استاد مربوطه (مدیرها بالاتر مجاز شدند)
+    from sqlalchemy import or_
+    from ..models import PracticumRecord, PracticumSubmission
+    rows = (db.query(PracticumSubmission)
+            .join(PracticumRecord, PracticumRecord.id == PracticumSubmission.record_id)
+            .filter(or_(PracticumRecord.student_id == user.id,
+                        PracticumRecord.supervisor_id == user.id)).all())
+    if any(att.id in [f.get("id") for f in (s.files or [])] for s in rows):
+        return True
     return False

@@ -4,6 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>پژوهشیار۳۶۰</title>
+    <script>
+      /* جلوگیری از پرش رنگ: تم ذخیره‌شده قبل از رندر اعمال می‌شود (شب پیش‌فرض) */
+      (function () {
+        try {
+          if (localStorage.getItem('theme') === 'light') document.documentElement.classList.add('light-theme')
+        } catch (e) { /* حالت شب پیش‌فرض */ }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

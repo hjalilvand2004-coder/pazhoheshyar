@@ -11,8 +11,15 @@ export default function Login() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [sso, setSso] = useState({ enabled: false })
+  const [light, setLight] = useState(() => document.documentElement.classList.contains('light-theme'))
 
   useEffect(() => { api('/auth/sso/config').then(setSso).catch(() => {}) }, [])
+
+  const toggleTheme = () => {
+    const isLight = document.documentElement.classList.toggle('light-theme')
+    try { localStorage.setItem('theme', isLight ? 'light' : 'dark') } catch { /* حالت شب پیش‌فرض */ }
+    setLight(isLight)
+  }
 
   const submit = async (e) => {
     e.preventDefault()
@@ -27,6 +34,11 @@ export default function Login() {
 
   return (
     <div className="login-wrap">
+      <button className="theme-toggle" onClick={toggleTheme} aria-label="تغییر تم شب و روز"
+              style={{ position: 'absolute', top: 18, left: 18, zIndex: 20 }}>
+        <span aria-hidden="true">{light ? '🌙' : '☀️'}</span>
+        <span>{light ? 'حالت شب' : 'حالت روز'}</span>
+      </button>
       <div className="auth-card">
         <div className="auth-panel">
           <div className="feat-logo">🎓</div>

@@ -8,14 +8,23 @@ const PALETTE = ['#2563eb', '#e11d48', '#059669', '#d97706', '#7c3aed', '#0891b2
 
 function Chart({ type, data, options = {}, height = 260 }) {
   const ref = useRef(null)
+  const [themeTick, setThemeTick] = useState(0)
+  useEffect(() => {
+    const onTheme = () => setThemeTick(t => t + 1)
+    window.addEventListener('py:theme', onTheme)
+    return () => window.removeEventListener('py:theme', onTheme)
+  }, [])
   useEffect(() => {
     if (!ref.current || !data) return
+    const dark = !document.documentElement.classList.contains('light-theme')
+    ChartJS.defaults.color = dark ? '#cbd5e1' : '#334155'
+    ChartJS.defaults.borderColor = dark ? 'rgba(255,255,255,.10)' : 'rgba(15,23,42,.12)'
     const c = new ChartJS(ref.current, {
       type, data,
       options: { responsive: true, maintainAspectRatio: false, ...options },
     })
     return () => c.destroy()
-  }, [type, JSON.stringify(data), JSON.stringify(options)])
+  }, [type, JSON.stringify(data), JSON.stringify(options), themeTick])
   return <div style={{ height, position: 'relative' }}>{data && <canvas ref={ref} />}</div>
 }
 
@@ -152,12 +161,12 @@ function DatasetsTab({ list, reload, selected, onSelect }) {
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', fontSize: 12.5, borderCollapse: 'collapse', direction: 'ltr' }}>
               <thead><tr>{detail.columns_meta.map(c =>
-                <th key={c.name} style={{ borderBottom: '2px solid #e4eaf2', padding: '4px 8px', textAlign: 'left' }}>
+                <th key={c.name} style={{ borderBottom: '2px solid var(--border)', padding: '4px 8px', textAlign: 'left' }}>
                   {c.name}<div style={{ fontSize: 10, fontWeight: 400, opacity: .6 }}>{c.dtype === 'numeric' ? 'عددی' : 'مقوله‌ای'}</div>
                 </th>)}</tr></thead>
               <tbody>{detail.preview.map((r, i) => (
                 <tr key={i}>{detail.columns_meta.map(c =>
-                  <td key={c.name} style={{ borderBottom: '1px dashed #e4eaf2', padding: '3px 8px' }}>
+                  <td key={c.name} style={{ borderBottom: '1px dashed var(--border)', padding: '3px 8px' }}>
                     {r[c.name] ?? '—'}</td>)}</tr>
               ))}</tbody>
             </table>
@@ -250,7 +259,7 @@ function ExploreTab({ dataset, datasets, onSelect }) {
           </div>
           <div className="grid cols-2">
             {numCols.slice(0, 6).map(c => (
-              <div key={c.name} style={{ border: '1px solid #e4eaf2', borderRadius: 10, padding: 8 }}>
+              <div key={c.name} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 8 }}>
                 <b style={{ fontSize: 13 }}>{c.name}</b>
                 <div className="hint">میانگین {toFa(c.mean)} · انحراف {toFa(c.std)} · پرت‌ها {toFa(c.outliers)}</div>
                 <Chart type="bar" height={150} data={{
@@ -268,7 +277,7 @@ function ExploreTab({ dataset, datasets, onSelect }) {
           <h4>🥧 مقوله‌های متغیرهای غیرعددی</h4>
           <div className="grid cols-2">
             {catCols.slice(0, 6).map(c => (
-              <div key={c.name} style={{ border: '1px solid #e4eaf2', borderRadius: 10, padding: 8 }}>
+              <div key={c.name} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 8 }}>
                 <b style={{ fontSize: 13 }}>{c.name}</b>
                 <div className="hint">{toFa(c.n_unique)} مقدار یکتا · {toFa(c.n_missing)} گمشده</div>
                 <Chart type="bar" height={150} data={{
@@ -753,7 +762,7 @@ function ExperimentResult({ exp }) {
 
       {/* ---------- پیش‌بینی ردیف جدید ---------- */}
       {exp.task !== 'clustering' && (
-        <div style={{ marginTop: 14, borderTop: '1px dashed #e4eaf2', paddingTop: 10 }}>
+        <div style={{ marginTop: 14, borderTop: '1px dashed var(--border)', paddingTop: 10 }}>
           <b style={{ fontSize: 13 }}>🔮 پیش‌بینی برای یک نمونهٔ جدید</b>
           <div className="row" style={{ gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
             {exp.features.map(f => (
@@ -779,7 +788,7 @@ function ExperimentResult({ exp }) {
       )}
 
       {/* ---------- درج نتایج در سند پژوهش ---------- */}
-      <div style={{ marginTop: 14, borderTop: '1px dashed #e4eaf2', paddingTop: 10 }}>
+      <div style={{ marginTop: 14, borderTop: '1px dashed var(--border)', paddingTop: 10 }}>
         <b style={{ fontSize: 13 }}>📝 درج خلاصهٔ نتایج در سند پژوهش تیمی</b>
         <div className="row" style={{ gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
           <select value={attachTo.doc_id} onChange={e => setAttachTo({ ...attachTo, doc_id: e.target.value, section_id: '' })}>

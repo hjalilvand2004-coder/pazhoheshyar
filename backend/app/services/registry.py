@@ -77,6 +77,14 @@ SERVICES = [
                    "GET /api/v1/lab/experiments", "GET /api/v1/lab/experiments/{id}",
                    "DELETE /api/v1/lab/experiments/{id}", "POST /api/v1/lab/experiments/{id}/predict",
                    "POST /api/v1/lab/experiments/{id}/attach-doc"]},
+    {"module": "practicum", "title": "کارآموزی، درس‌پروژه و تحقیق و ارائه (مقطع‌محور)",
+     "description": "درس‌های عملی نسبت به مقطع تحصیلی: کارآموزی و درس‌پروژه برای کاردانی/کارشناسی،"
+                    " تحقیق و ارائه برای کارشناسی ارشد؛ چرخهٔ «ارسال گزارش پیشرفت ← ارزیابی و بازخورد استاد"
+                    " ← اصلاح در نوبت بعد» تا تأیید نهایی (رایج ۴ تا ۵ نوبت) با ثبت نمره و فایل‌های امن",
+     "endpoints": ["GET /api/v1/practicum/meta", "POST /api/v1/practicum/", "GET /api/v1/practicum/mine",
+                   "GET /api/v1/practicum/supervised", "GET /api/v1/practicum/all",
+                   "GET /api/v1/practicum/{id}", "POST /api/v1/practicum/{id}/submissions",
+                   "POST /api/v1/practicum/submissions/{id}/review", "POST /api/v1/practicum/{id}/cancel"]},
     {"module": "files", "title": "فایل امن", "description": "دانلود با کنترل دسترسی و نام ذخیره غیرقابل حدس",
      "endpoints": ["GET /api/v1/files/{id}"]},
     {"module": "notifications", "title": "اعلان‌ها", "description": "اعلان داخلی کاربران",

@@ -543,3 +543,45 @@ class LabExperiment(Base):
     error = Column(Text, default="")
     created_at = Column(DateTime(timezone=True), default=now_utc)
 
+
+# ============================================================
+# کارآموزی / درس‌پروژه / تحقیق و ارائه — درس‌های مقطع‌محور با چرخهٔ
+# «ارسال گزارش ← ارزیابی استاد ← اصلاح» تا تأیید نهایی (۴ تا ۵ نوبت رایج)
+# ============================================================
+
+class PracticumRecord(Base):
+    """رکورد درس کارآموزی/درس‌پروژه (کاردانی و کارشناسی) یا تحقیق و ارائه (کارشناسی ارشد)."""
+    __tablename__ = "practicum_records"
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    supervisor_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    course_type = Column(String(40), nullable=False)          # internship | course_project | research_presentation
+    degree_key = Column(String(20), default="")               # associate | bachelor | master | phd
+    title = Column(String(300), nullable=False)
+    description = Column(Text, default="")
+    semester = Column(String(60), default="")                 # مثلاً نیم‌سال اول ۱۴۰۴-۱۴۰۵
+    status = Column(String(20), default="active", index=True)  # active | awaiting_review | needs_revision | approved | cancelled
+    round_count = Column(Integer, default=0)                  # تعداد نوبت‌های ارسال تاکنون
+    final_score = Column(Float, nullable=True)                # نمرهٔ نهایی (۰ تا ۲۰) هنگام تأیید
+    supervisor_note = Column(Text, default="")                # جمع‌بندی استاد هنگام تأیید
+    approved_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=now_utc)
+    updated_at = Column(DateTime(timezone=True), default=now_utc, onupdate=now_utc)
+
+
+class PracticumSubmission(Base):
+    """یک نوبت ارسال گزارش پیشرفت توسط دانشجو + ارزیابی استاد روی همان نوبت."""
+    __tablename__ = "practicum_submissions"
+    id = Column(Integer, primary_key=True)
+    record_id = Column(Integer, ForeignKey("practicum_records.id"), nullable=False, index=True)
+    round_no = Column(Integer, nullable=False)
+    note = Column(Text, default="")
+    files = Column(JSON, default=list)                        # [{id, name, size}]
+    status = Column(String(20), default="pending", index=True)  # pending | approved | needs_revision
+    feedback = Column(Text, default="")                       # بازخورد استاد
+    supervisor_note = Column(Text, default="")                # توضیح تکمیلی استاد
+    score = Column(Float, nullable=True)                      # نمرهٔ این نوبت (اختیاری)
+    reviewer_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=now_utc)
+

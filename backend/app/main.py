@@ -36,6 +36,7 @@ from .services.files import router as files_router            # noqa: E402
 from .services.lab import router as lab_router                # noqa: E402
 from .services.notifications import router as notif_router    # noqa: E402
 from .services.offers import router as offers_router          # noqa: E402
+from .services.practicum import router as practicum_router    # noqa: E402
 from .services.profiles import router as profiles_router      # noqa: E402
 from .services.projects import router as projects_router      # noqa: E402
 from .services.registry import router as registry_router      # noqa: E402
@@ -62,6 +63,7 @@ app.include_router(research_router)
 app.include_router(research_ai_router)
 app.include_router(registry_router)
 app.include_router(lab_router)
+app.include_router(practicum_router)
 app.include_router(semantic_router)
 
 

@@ -15,6 +15,22 @@ def iso(dt: datetime | None) -> str | None:
     return dt.isoformat() if dt else None
 
 
+def degree_key_of(degree: str) -> str | None:
+    """نرمال‌سازی متن آزاد مقطع تحصیلی به کلید استاندارد — «کارشناسی ارشد» پیش از «کارشناسی» چک می‌شود."""
+    s = (degree or "").strip().lower()
+    if not s:
+        return None
+    if "کاردانی" in s:
+        return "associate"
+    if "ارشد" in s or "استادی" in s:
+        return "master"
+    if "دکتر" in s or "دکتری" in s or "phd" in s:
+        return "phd"
+    if "کارشناسی" in s or "لیسانس" in s:
+        return "bachelor"
+    return None
+
+
 def notify(db: Session, user_id: int, ntype: str, title: str, body: str = "", link: str = "") -> None:
     if user_id:
         from ..models import Notification

@@ -61,6 +61,7 @@ const MENUS = [
   { to: '/chat', label: 'گفت‌وگوها', ic: '💬', roles: ['student', 'professor'] },
   { to: '/projects', label: 'پروژه‌های من', ic: '🗂️', roles: ['student', 'professor', 'research_manager', 'system_admin'] },
   { to: '/research', label: 'فضای پژوهش', ic: '📝', roles: ['student', 'professor', 'research_manager', 'system_admin'] },
+  { to: '/practicum', label: 'کارآموزی و درس‌پروژه', ic: '🛠️', adaptive: true, roles: ['student', 'professor', 'research_manager', 'system_admin'] },
   { to: '/lab', label: 'آزمایشگاه شبیه‌سازی', ic: '🧪', roles: ['student', 'professor', 'research_manager', 'system_admin'] },
   { to: '/ai', label: 'دستیار هوشمند', ic: '🤖', roles: ['student', 'professor', 'research_manager'] },
   { to: '/semantic', label: 'شبکهٔ دانش', ic: '🕸️', roles: ['student', 'professor', 'research_manager', 'system_admin'] },
@@ -68,6 +69,36 @@ const MENUS = [
   { to: '/admin/sso', label: 'تنظیمات ورود یکپارچه', ic: '🔐', roles: ['system_admin'] },
   { to: '/profile', label: 'پروفایل پژوهشی', ic: '👤', roles: ['student', 'professor', 'research_manager', 'system_admin'] },
 ]
+
+/* برچسب منوی درس‌های عملی نسبت به مقطع تحصیلی — نمایش مقطع‌محور */
+function practicumLabel(user) {
+  const roles = user?.roles || []
+  if (roles.includes('professor')) return 'ارزیابی کارآموزی و درس‌پروژه'
+  if (roles.includes('research_manager') || roles.includes('system_admin')) return 'درس‌های عملی دانشجویان'
+  switch (user?.degree_key) {
+    case 'master': return 'تحقیق و ارائه'
+    case 'associate':
+    case 'bachelor': return 'کارآموزی و درس‌پروژه'
+    default: return 'کارآموزی و درس‌پروژه'
+  }
+}
+
+function ThemeToggle() {
+  const [light, setLight] = useState(() => document.documentElement.classList.contains('light-theme'))
+  const toggle = () => {
+    const isLight = document.documentElement.classList.toggle('light-theme')
+    try { localStorage.setItem('theme', isLight ? 'light' : 'dark') } catch { /* حالت شب پیش‌فرض */ }
+    window.dispatchEvent(new Event('py:theme'))
+    setLight(isLight)
+  }
+  return (
+    <button className="theme-toggle" onClick={toggle} aria-label="تغییر تم شب و روز"
+            title="تغییر تم شب / روز">
+      <span aria-hidden="true">{light ? '🌙' : '☀️'}</span>
+      <span>{light ? 'حالت شب' : 'حالت روز'}</span>
+    </button>
+  )
+}
 
 export default function Layout({ children }) {
   const { user, logout } = useAuth()
@@ -82,18 +113,22 @@ export default function Layout({ children }) {
           <span>پژوهشیار۳۶۰<small>اکوسیستم دانشجو۳۶۰</small></span>
         </div>
         <div className="nav-cap">منوی اصلی</div>
-        {MENUS.filter(m => m.roles.some(r => (user.roles || []).includes(r))).map(m => (
-          <NavLink key={m.to} to={m.to} end={m.end} className={({ isActive }) => (isActive ? 'active' : '')}>
-            <span className="ic">{m.ic}</span>
-            {m.label}
-          </NavLink>
-        ))}
+        {MENUS
+          .map(m => (m.adaptive ? { ...m, label: practicumLabel(user) } : m))
+          .filter(m => m.roles.some(r => (user.roles || []).includes(r)))
+          .map(m => (
+            <NavLink key={m.to} to={m.to} end={m.end} className={({ isActive }) => (isActive ? 'active' : '')}>
+              <span className="ic">{m.ic}</span>
+              {m.label}
+            </NavLink>
+          ))}
         <div className="spacer" />
         <div className="userbox">
           <span className="avatar">{(user.display_name || '؟').trim().charAt(0)}</span>
           <div>
             <b>{user.display_name}</b>
             {user.role_labels?.join('، ')}
+            {user.degree && <span className="degree-tag">🎓 {user.degree}</span>}
             {user.sso_linked && <div className="sso-tag">🔗 متصل به SSO</div>}
           </div>
         </div>
@@ -102,11 +137,12 @@ export default function Layout({ children }) {
       <div className="main">
         <header className="topbar">
           <Breadcrumbs />
+          <ThemeToggle />
           <Bell />
         </header>
         <main className="content" key={loc.pathname}>{children}</main>
         <footer className="footer">
-          <span>پژوهشیار۳۶۰ — نسخه ۱.۳.۰ | بخشی از اکوسیستم دانشجو۳۶۰ | داده‌های نمایشی صریحاً «آزمایشی» برچسب خورده‌اند</span>
+          <span>پژوهشیار۳۶۰ — نسخه ۱.۴.۰ | بخشی از اکوسیستم دانشجو۳۶۰ | داده‌های نمایشی صریحاً «آزمایشی» برچسب خورده‌اند</span>
         </footer>
       </div>
     </div>

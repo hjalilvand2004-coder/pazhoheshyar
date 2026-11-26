@@ -24,7 +24,7 @@ from ..core import oidc
 from ..core.oidc import SsoError, error_message
 from ..core.security import create_token, decode_token, verify_password
 from ..core.sso_store import get_settings
-from ..core.utils import log_event
+from ..core.utils import degree_key_of, log_event
 from ..models import User
 from ..serializers import ser_user
 
@@ -94,12 +94,24 @@ def login(body: LoginIn, db: Session = Depends(get_db)):
     token = create_token(user.id, user.username, user.roles or [])
     log_event(db, "user_login", user.id, {"method": "password"})
     db.commit()
-    return {"token": token, "user": ser_user(user), "app": {"name": APP_NAME, "version": APP_VERSION}}
+    return {"token": token, "user": _user_with_degree(db, user),
+            "app": {"name": APP_NAME, "version": APP_VERSION}}
 
 
-@router.get("/me", summary="کاربر جاری")
-def me(user: User = Depends(get_current_user)):
-    return ser_user(user)
+@router.get("/me", summary="کاربر جاری + مقطع تحصیلی (برای نمایش مقطع‌محور منوها)")
+def me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return _user_with_degree(db, user)
+
+
+def _user_with_degree(db: Session, user: User) -> dict:
+    """پروفایل کاربر + مقطع تحصیلی و کلید نرمال‌شدهٔ آن برای نمایش مقطع‌محور."""
+    from ..models import ResearchProfile
+    out = ser_user(user)
+    p = db.query(ResearchProfile).filter(ResearchProfile.user_id == user.id).one_or_none()
+    degree = (p.degree if p else "") or ""
+    out["degree"] = degree
+    out["degree_key"] = degree_key_of(degree)
+    return out
 
 
 @router.post("/logout", summary="خروج — با ابطال نشست محلی و بازگشت به پرتال")
