@@ -1,17 +1,24 @@
 """درس‌های مقطع‌محور — کارآموزی و درس‌پروژه (کاردانی/کارشناسی) و تحقیق و ارائه (کارشناسی ارشد).
 
-چرخهٔ هر درس: دانشجو گزارش پیشرفت را بارگذاری می‌کند ← استاد مربوطه ارزیابی و بازخورد می‌دهد ←
-دانشجو اصلاحات را در نوبت بعدی ارسال می‌کند ← پس از چند رفت‌وبرگشت (رایج ۴ تا ۵ نوبت) درس
-تأیید نهایی می‌شود و نمره ثبت می‌گردد. نمایش درس‌ها و اعتبارسنجی‌ها نسبت به مقطع تحصیلی انجام می‌شود.
+چرخهٔ کارآموزی (گردش کار جدید):
+  دانشجو کارآموزی را ثبت می‌کند ← استاد مربوطه «پذیرش» و زمان‌بندی گزارش پیشرفت را تعیین می‌کند
+  (روزانه / هفتگی / دوهفته‌یکبار) ← از لحظهٔ پذیرش، دانشجو طبق همان برنامه گزارش پیشرفت را
+  «بدون انتظار تأیید مرحله‌ای» می‌فرستد ← استاد هر گزارش را با طیف لیکرت ۰ تا ۴ امتیاز می‌دهد ←
+  پس از گزارش مرحلهٔ آخر، استاد «تأیید نهایی» را می‌زند و نمرهٔ کارآموزی = سرجمع امتیازها
+  (سقف ۲۰) ثبت می‌شود. حداقل ۵ گزارش پیشرفت در ترم برای تأیید نهایی لازم است.
+
+چرخهٔ درس‌پروژه و تحقیق و ارائه (بدون تغییر):
+  ارسال نوبت گزارش پیشرفت ← ارزیابی و بازخورد استاد ← اصلاح در نوبت بعد ← تأیید نهایی با نمرهٔ ۰ تا ۲۰.
 """
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..core.deps import get_current_user, require_roles
 from ..core.database import get_db
 from ..core.utils import degree_key_of, log_event, notify, now_utc
-from ..models import PracticumRecord, PracticumSubmission, PracticumWorkReport, ResearchProfile, User
+from ..models import PracticumRecord, PracticumSubmission, ResearchProfile, User
 
 router = APIRouter(prefix="/api/v1/practicum", tags=["کارآموزی و درس‌پروژه"])
 
@@ -31,22 +38,30 @@ DEGREE_LABELS = {
     "phd": "دکتری",
 }
 RECORD_STATUS_FA = {
+    "pending_acceptance": "در انتظار پذیرش استاد",
     "active": "فعال",
     "awaiting_review": "در انتظار ارزیابی استاد",
     "needs_revision": "نیازمند اصلاح",
     "approved": "تأییدشده",
     "cancelled": "لغوشده",
 }
-REPORT_INTERVAL_FA = {"daily": "روزانه", "weekly": "هفتگی"}
-MIN_WORK_REPORTS = 5   # حداقل گزارش کار کارآموزی در ترم (استاد می‌تواند بیشتر تعیین کند)
+REPORT_INTERVAL_FA = {"daily": "روزانه", "weekly": "هفتگی", "biweekly": "دوهفته‌یکبار"}
+INTERVAL_DAYS = {"daily": 1, "weekly": 7, "biweekly": 14}
+MIN_PROGRESS_REPORTS = 5   # حداقل گزارش پیشرفت کارآموزی در ترم (استاد می‌تواند بیشتر تعیین کند)
+LIKERT_MAX = 4             # بالاترین امتیاز طیف لیکرت هر گزارش
+SCORE_MAX = 20             # نمرهٔ نهایی کارآموزی از ۲۰ — سرجمع امتیاز لیکرت با سقف ۲۰
 SUBMISSION_STATUS_FA = {
-    "pending": "در انتظار ارزیابی",
-    "approved": "پذیرفته‌شده",
+    "pending": "در انتظار امتیاز استاد",
+    "approved": "امتیاز داده شد",
     "needs_revision": "اصلاح لازم",
 }
 # راهنمای صادقانه برای دانشجو و استاد
 ROUND_GUIDANCE = ("معمولاً پس از ۴ تا ۵ نوبت ارسال و اصلاح، درس تأیید نهایی می‌شود؛ "
                   "تعداد نوبت‌ها بسته به کیفیت کار در اختیار استاد مربوطه است.")
+INTERNSHIP_GUIDANCE = ("پس از ثبت کارآموزی، استاد مربوطه پذیرش و زمان‌بندی گزارش پیشرفت را تعیین می‌کند "
+                       "(روزانه، هفتگی یا دوهفته‌یکبار). از لحظهٔ پذیرش، دانشجو طبق برنامه گزارش می‌فرستد — "
+                       "بدون نیاز به انتظار برای تأیید هر مرحله. استاد هر گزارش را با طیف لیکرت ۰ تا ۴ امتیاز می‌دهد و "
+                       "سرجمع امتیازها (سقف ۲۰) نمرهٔ کارآموزی از ۲۰ می‌شود. حداقل ۵ گزارش پیشرفت در ترم لازم است.")
 
 
 def _profile_of(db: Session, user_id: int) -> ResearchProfile:
@@ -73,34 +88,61 @@ def _ser_submission(s: PracticumSubmission) -> dict:
     return {"id": s.id, "record_id": s.record_id, "round_no": s.round_no, "note": s.note,
             "files": s.files or [], "status": s.status, "status_fa": SUBMISSION_STATUS_FA.get(s.status, s.status),
             "feedback": s.feedback, "supervisor_note": s.supervisor_note,
-            "score": s.score,
+            "score": s.score, "likert_score": s.likert_score,
             "reviewed_at": s.reviewed_at.isoformat() if s.reviewed_at else None,
             "created_at": s.created_at.isoformat() if s.created_at else None}
 
 
-def _ser_work_report(w: PracticumWorkReport) -> dict:
-    return {"id": w.id, "record_id": w.record_id, "report_no": w.report_no, "title": w.title,
-            "content": w.content, "hours": w.hours, "status": w.status,
-            "status_fa": SUBMISSION_STATUS_FA.get(w.status, w.status), "feedback": w.feedback,
-            "reviewed_at": w.reviewed_at.isoformat() if w.reviewed_at else None,
-            "created_at": w.created_at.isoformat() if w.created_at else None}
+def _internship_stats(db: Session, r: PracticumRecord) -> dict:
+    """سنجه‌های زندهٔ کارآموزی: امتیاز تجمعی لیکرت، پیشرفت نسبت به زمان‌بندی و آخرین گزارش."""
+    from datetime import timezone
+
+    def _utc(dt):
+        # SQLite مقدار زمانی را بدون timezone برمی‌گرداند؛ با UTC هم‌تراز می‌کنیم
+        return dt.replace(tzinfo=timezone.utc) if dt and dt.tzinfo is None else dt
+
+    subs = (db.query(PracticumSubmission)
+            .filter(PracticumSubmission.record_id == r.id).all())
+    scored = [s.likert_score for s in subs if s.likert_score is not None]
+    interval_days = INTERVAL_DAYS.get(r.report_interval or "weekly", 7)
+    start = _utc(r.accepted_at)
+    end = _utc(r.approved_at) or now_utc()
+    expected = 0
+    days_since = 0
+    if start and r.status in ("active", "approved"):
+        days_since = max(0, (end - start).days)
+        expected = days_since // interval_days + (1 if days_since % interval_days else 0)
+        expected = max(1, expected)
+    last = max((s.created_at for s in subs), default=None)
+    return {
+        "likert_sum": sum(scored),
+        "current_score": min(SCORE_MAX, sum(scored)),
+        "scored_count": len(scored),
+        "unscored_count": len(subs) - len(scored),
+        "expected_reports": expected,
+        "days_since_accept": days_since,
+        "last_report_at": last.isoformat() if last else None,
+    }
 
 
-def _ser_record(r: PracticumRecord, student_name="", supervisor_name="") -> dict:
-    return {"id": r.id, "student_id": r.student_id, "student_name": student_name,
-            "supervisor_id": r.supervisor_id, "supervisor_name": supervisor_name,
-            "course_type": r.course_type, "course_fa": COURSE_TYPES.get(r.course_type, {}).get("fa", r.course_type),
-            "degree_key": r.degree_key, "degree_fa": DEGREE_LABELS.get(r.degree_key, r.degree_key),
-            "title": r.title, "description": r.description, "semester": r.semester,
-            "status": r.status, "status_fa": RECORD_STATUS_FA.get(r.status, r.status),
-            "round_count": r.round_count, "final_score": r.final_score,
-            "report_interval": r.report_interval or "weekly",
-            "report_interval_fa": REPORT_INTERVAL_FA.get(r.report_interval or "weekly", "هفتگی"),
-            "min_reports": r.min_reports if r.min_reports is not None else MIN_WORK_REPORTS,
-            "report_count": r.report_count or 0,
-            "supervisor_note": r.supervisor_note,
-            "approved_at": r.approved_at.isoformat() if r.approved_at else None,
-            "created_at": r.created_at.isoformat() if r.created_at else None}
+def _ser_record(r: PracticumRecord, student_name="", supervisor_name="", db: Session | None = None) -> dict:
+    out = {"id": r.id, "student_id": r.student_id, "student_name": student_name,
+           "supervisor_id": r.supervisor_id, "supervisor_name": supervisor_name,
+           "course_type": r.course_type, "course_fa": COURSE_TYPES.get(r.course_type, {}).get("fa", r.course_type),
+           "degree_key": r.degree_key, "degree_fa": DEGREE_LABELS.get(r.degree_key, r.degree_key),
+           "title": r.title, "description": r.description, "semester": r.semester,
+           "status": r.status, "status_fa": RECORD_STATUS_FA.get(r.status, r.status),
+           "round_count": r.round_count, "final_score": r.final_score,
+           "report_interval": r.report_interval or "weekly",
+           "report_interval_fa": REPORT_INTERVAL_FA.get(r.report_interval or "weekly", "هفتگی"),
+           "min_reports": r.min_reports if r.min_reports is not None else MIN_PROGRESS_REPORTS,
+           "accepted_at": r.accepted_at.isoformat() if r.accepted_at else None,
+           "supervisor_note": r.supervisor_note,
+           "approved_at": r.approved_at.isoformat() if r.approved_at else None,
+           "created_at": r.created_at.isoformat() if r.created_at else None}
+    if db is not None and r.course_type == "internship":
+        out.update(_internship_stats(db, r))
+    return out
 
 
 class RecordIn(BaseModel):
@@ -112,21 +154,24 @@ class RecordIn(BaseModel):
 
 
 class ReviewIn(BaseModel):
-    decision: str                 # approved | needs_revision
+    decision: str                 # approved | needs_revision — فقط درس‌پروژه/تحقیق و ارائه
     feedback: str = ""
     supervisor_note: str = ""
     score: float | None = None
 
 
-class ScheduleIn(BaseModel):
-    report_interval: str          # daily | weekly
-    min_reports: int = MIN_WORK_REPORTS
+class AcceptIn(BaseModel):
+    report_interval: str          # daily | weekly | biweekly
+    min_reports: int = MIN_PROGRESS_REPORTS
 
 
-class WorkReportIn(BaseModel):
-    title: str
-    content: str = ""
-    hours: float | None = None
+class LikertIn(BaseModel):
+    score: int                    # طیف لیکرت ۰ تا ۴
+    feedback: str = ""
+
+
+class FinalIn(BaseModel):
+    supervisor_note: str = ""
 
 
 # ============================================================
@@ -146,12 +191,13 @@ def meta(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
             "is_student": is_student,
             "courses": courses,
             "round_guidance": ROUND_GUIDANCE,
-            "internship_guidance": ("در کارآموزی، زمان‌بندی گزارش کار (روزانه یا هفتگی) را استاد مربوطه تعیین می‌کند؛ "
-                                    "برای تأیید نهایی کارآموزی، حداقل ۵ گزارش کار در ترم باید ثبت شده باشد."),
+            "internship_guidance": INTERNSHIP_GUIDANCE,
+            "likert_max": LIKERT_MAX,
+            "score_max": SCORE_MAX,
             "degrees": DEGREE_LABELS}
 
 
-@router.post("/", summary="ایجاد رکورد درس (دانشجو) — درس باید با مقطع تحصیلی سازگار باشد")
+@router.post("/", summary="ایجاد رکورد درس (دانشجو) — کارآموزی پس از ثبت، در انتظار پذیرش استاد است")
 def create_record(body: RecordIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if "student" not in (user.roles or []):
         raise HTTPException(status_code=403, detail="فقط دانشجو رکورد درس می‌سازد")
@@ -171,16 +217,24 @@ def create_record(body: RecordIn, user: User = Depends(get_current_user), db: Se
         raise HTTPException(status_code=400, detail="استاد مربوطه باید یک استاد فعال سامانه باشد")
     if not (body.title or "").strip():
         raise HTTPException(status_code=400, detail="عنوان درس را بنویسید")
+    is_internship = body.course_type == "internship"
     r = PracticumRecord(student_id=user.id, supervisor_id=sup.id, course_type=body.course_type,
                         degree_key=dk, title=body.title.strip()[:300],
-                        description=body.description, semester=body.semester)
+                        description=body.description, semester=body.semester,
+                        status="pending_acceptance" if is_internship else "active")
     db.add(r)
-    notify(db, sup.id, "practicum_assigned", "ارزیابی درس جدید",
-           f"{user.display_name} شما را استاد مربوطهٔ «{COURSE_TYPES[body.course_type]['fa']} — {r.title}» قرار داد.",
-           link="/internship" if r.course_type == "internship" else "/practicum")
+    if is_internship:
+        notify(db, sup.id, "practicum_assigned", "پذیرش کارآموزی",
+               f"{user.display_name} کارآموزی «{r.title}» را با شما ثبت کرد؛ پذیرش و زمان‌بندی "
+               f"گزارش پیشرفت (روزانه/هفتگی/دوهفته‌یکبار) را تعیین کنید.",
+               link="/internship")
+    else:
+        notify(db, sup.id, "practicum_assigned", "ارزیابی درس جدید",
+               f"{user.display_name} شما را استاد مربوطهٔ «{COURSE_TYPES[body.course_type]['fa']} — {r.title}» قرار داد.",
+               link="/practicum")
     log_event(db, "practicum_created", user.id, {"record_id": r.id, "course_type": body.course_type, "degree": dk})
     db.commit()
-    return _ser_record(r, user.display_name, sup.display_name)
+    return _ser_record(r, user.display_name, sup.display_name, db)
 
 
 @router.get("/mine", summary="درس‌های من (دانشجو)")
@@ -189,7 +243,7 @@ def my_records(user: User = Depends(get_current_user), db: Session = Depends(get
             .join(User, User.id == PracticumRecord.supervisor_id)
             .filter(PracticumRecord.student_id == user.id)
             .order_by(PracticumRecord.created_at.desc()).all())
-    return [_ser_record(r, user.display_name, u.display_name) for r, u in rows]
+    return [_ser_record(r, user.display_name, u.display_name, db) for r, u in rows]
 
 
 @router.get("/supervised", summary="درس‌های تحت ارزیابی من (استاد)")
@@ -198,7 +252,7 @@ def supervised(user: User = Depends(get_current_user), db: Session = Depends(get
             .join(User, User.id == PracticumRecord.student_id)
             .filter(PracticumRecord.supervisor_id == user.id)
             .order_by(PracticumRecord.updated_at.desc()).all())
-    return [_ser_record(r, u.display_name, user.display_name) for r, u in rows]
+    return [_ser_record(r, u.display_name, user.display_name, db) for r, u in rows]
 
 
 @router.get("/all", summary="همهٔ رکوردهای درس‌ها (مدیر پژوهش)")
@@ -210,11 +264,91 @@ def all_records(user: User = Depends(require_roles("research_manager", "system_a
     out = []
     for r, u in rows:
         sup = db.get(User, r.supervisor_id)
-        out.append(_ser_record(r, u.display_name, sup.display_name if sup else ""))
+        out.append(_ser_record(r, u.display_name, sup.display_name if sup else "", db))
     return out
 
 
-@router.get("/{rec_id}", summary="نمای کامل رکورد: نوبت‌های ارسال، بازخوردها و وضعیت")
+# ============================================================
+# داشبورد کارآموزی‌ها — برای مدیرآموزش/مدیرگروه (مدیر پژوهش سامانه)
+# ============================================================
+
+@router.get("/internship-dashboard", summary="گزارش کارآموزی‌های تمام‌شده و در جریان + سنجه‌های روند (مدیر)")
+def internship_dashboard(user: User = Depends(require_roles("research_manager", "system_admin")),
+                         db: Session = Depends(get_db)):
+    rows = (db.query(PracticumRecord, User)
+            .join(User, User.id == PracticumRecord.student_id)
+            .filter(PracticumRecord.course_type == "internship")
+            .order_by(PracticumRecord.created_at.desc()).all())
+    completed, ongoing = [], []
+    for r, u in rows:
+        sup = db.get(User, r.supervisor_id)
+        sup_name = sup.display_name if sup else ""
+        base = _ser_record(r, u.display_name, sup_name, db)
+        item = {"id": r.id, "student_name": u.display_name, "supervisor_name": sup_name,
+                "title": r.title, "semester": r.semester, "status": r.status,
+                "status_fa": RECORD_STATUS_FA.get(r.status, r.status),
+                "report_interval_fa": REPORT_INTERVAL_FA.get(r.report_interval or "weekly", "هفتگی"),
+                "round_count": r.round_count, "min_reports": r.min_reports or MIN_PROGRESS_REPORTS,
+                "final_score": r.final_score,
+                "accepted_at": base.get("accepted_at"), "approved_at": base.get("approved_at"),
+                "current_score": base.get("current_score"), "likert_sum": base.get("likert_sum"),
+                "scored_count": base.get("scored_count"), "unscored_count": base.get("unscored_count"),
+                "expected_reports": base.get("expected_reports"), "last_report_at": base.get("last_report_at"),
+                "days_since_accept": base.get("days_since_accept")}
+        if r.status == "approved":
+            completed.append(item)
+        elif r.status in ("pending_acceptance", "active"):
+            item["progress_ratio"] = (r.round_count / item["expected_reports"]) if item["expected_reports"] else 0
+            item["behind_schedule"] = item["progress_ratio"] < 1
+            ongoing.append(item)
+
+    stats = {"total": len(rows), "completed": len(completed), "ongoing": len(ongoing),
+             "pending_acceptance": sum(1 for o in ongoing if o["status"] == "pending_acceptance"),
+             "behind_schedule": sum(1 for o in ongoing if o.get("behind_schedule"))}
+
+    # روند ارسال گزارش‌های پیشرفت — ۱۰ هفتهٔ اخیر
+    from datetime import timedelta
+    subs = (db.query(PracticumSubmission, PracticumRecord)
+            .join(PracticumRecord, PracticumRecord.id == PracticumSubmission.record_id)
+            .filter(PracticumRecord.course_type == "internship").all())
+    today = now_utc().date()
+    week_start = today - timedelta(days=today.weekday())
+    per_week = {}
+    for s, _r in subs:
+        if not s.created_at:
+            continue
+        d = s.created_at.date()
+        ws = d - timedelta(days=d.weekday())
+        per_week[ws.isoformat()] = per_week.get(ws.isoformat(), 0) + 1
+    submissions_per_week = []
+    for i in range(9, -1, -1):
+        ws = week_start - timedelta(weeks=i)
+        submissions_per_week.append({"week": ws.isoformat(), "count": per_week.get(ws.isoformat(), 0)})
+
+    # میانگین امتیاز لیکرت به تفکیک شمارهٔ گزارش — روند کیفیت
+    by_round = {}
+    for s, _r in subs:
+        if s.likert_score is not None:
+            by_round.setdefault(s.round_no, []).append(s.likert_score)
+    avg_likert_by_round = [{"round_no": k, "avg": round(sum(v) / len(v), 2), "count": len(v)}
+                           for k, v in sorted(by_round.items())]
+
+    status_distribution = [
+        {"status": "pending_acceptance", "fa": "در انتظار پذیرش", "count": stats["pending_acceptance"]},
+        {"status": "active", "fa": "فعال (در جریان)",
+         "count": sum(1 for o in ongoing if o["status"] == "active")},
+        {"status": "approved", "fa": "تأییدشده", "count": len(completed)},
+        {"status": "cancelled", "fa": "لغوشده", "count": sum(1 for r, _u in rows if r.status == "cancelled")},
+    ]
+    behind = [o for o in ongoing if o["status"] == "active" and o.get("behind_schedule")]
+    return {"stats": stats, "completed": completed, "ongoing": ongoing,
+            "behind_schedule": behind,
+            "series": {"submissions_per_week": submissions_per_week,
+                       "avg_likert_by_round": avg_likert_by_round,
+                       "status_distribution": status_distribution}}
+
+
+@router.get("/{rec_id}", summary="نمای کامل رکورد: نوبت‌های ارسال، امتیازها و وضعیت")
 def record_detail(rec_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     r = _get_record_checked(db, rec_id, user)
     student = db.get(User, r.student_id)
@@ -222,16 +356,13 @@ def record_detail(rec_id: int, user: User = Depends(get_current_user), db: Sessi
     subs = (db.query(PracticumSubmission)
             .filter(PracticumSubmission.record_id == r.id)
             .order_by(PracticumSubmission.round_no.desc()).all())
-    out = _ser_record(r, student.display_name if student else "", sup.display_name if sup else "")
+    out = _ser_record(r, student.display_name if student else "", sup.display_name if sup else "", db)
     out["submissions"] = [_ser_submission(s) for s in subs]
-    wrs = (db.query(PracticumWorkReport).filter(PracticumWorkReport.record_id == r.id)
-           .order_by(PracticumWorkReport.report_no.desc()).all())
-    out["work_reports"] = [_ser_work_report(w) for w in wrs]
     out["is_my_record"] = user.id in (r.student_id, r.supervisor_id)
     return out
 
 
-@router.post("/{rec_id}/submissions", summary="ارسال گزارش پیشرفت (نوبت جدید) با فایل‌ها")
+@router.post("/{rec_id}/submissions", summary="ارسال گزارش پیشرفت با فایل‌ها — در کارآموزی بدون انتظار تأیید مرحله‌ای")
 def submit_report(rec_id: int, note: str = Form(""),
                   files: list[UploadFile] = File(default=[]),
                   user: User = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -242,6 +373,10 @@ def submit_report(rec_id: int, note: str = Form(""),
         raise HTTPException(status_code=400, detail="این درس تأیید نهایی شده است")
     if r.status == "cancelled":
         raise HTTPException(status_code=400, detail="این رکورد لغو شده است")
+    if r.course_type == "internship" and r.status == "pending_acceptance":
+        raise HTTPException(status_code=400,
+                            detail="کارآموزی هنوز توسط استاد مربوطه پذیرفته نشده است؛ پس از پذیرش و تعیین "
+                                   "زمان‌بندی، ارسال گزارش پیشرفت آغاز می‌شود")
     if len(files) > MAX_FILES_PER_SUBMISSION:
         raise HTTPException(status_code=400, detail=f"بیشتر از {MAX_FILES_PER_SUBMISSION} فایل در هر نوبت مجاز نیست")
     import uuid
@@ -262,20 +397,30 @@ def submit_report(rec_id: int, note: str = Form(""),
         db.flush()
         saved.append({"id": att.id, "name": att.orig_name, "size": att.size})
     r.round_count += 1
-    r.status = "awaiting_review"
+    # کارآموزی: وضعیت رکورد «فعال» می‌ماند و گزارش طبق زمان‌بندی آزادانه ارسال می‌شود؛
+    # درس‌پروژه/تحقیق و ارائه: رکورد به «در انتظار ارزیابی» می‌رود.
+    if r.course_type != "internship":
+        r.status = "awaiting_review"
     s = PracticumSubmission(record_id=r.id, round_no=r.round_count, note=note, files=saved)
     db.add(s)
-    notify(db, r.supervisor_id, "practicum_submission",
-           f"نوبت {r.round_count} — گزارش جدید",
-           f"{user.display_name} در «{r.title}» گزارش نوبت {r.round_count} را بارگذاری کرد؛ برای ارزیابی آماده است.",
-           link="/internship" if r.course_type == "internship" else "/practicum")
+    if r.course_type == "internship":
+        notify(db, r.supervisor_id, "practicum_submission",
+               f"گزارش پیشرفت {r.round_count} — کارآموزی",
+               f"{user.display_name} طبق زمان‌بندی {REPORT_INTERVAL_FA.get(r.report_interval or 'weekly', 'هفتگی')} "
+               f"گزارش پیشرفت {r.round_count} کارآموزی «{r.title}» را ثبت کرد.",
+               link="/internship")
+    else:
+        notify(db, r.supervisor_id, "practicum_submission",
+               f"نوبت {r.round_count} — گزارش جدید",
+               f"{user.display_name} در «{r.title}» گزارش نوبت {r.round_count} را بارگذاری کرد؛ برای ارزیابی آماده است.",
+               link="/practicum")
     log_event(db, "practicum_submitted", user.id,
               {"record_id": r.id, "round_no": r.round_count, "files": len(saved)})
     db.commit()
-    return {"record": _ser_record(r), "submission": _ser_submission(s)}
+    return {"record": _ser_record(r, db=db), "submission": _ser_submission(s)}
 
 
-@router.post("/submissions/{sub_id}/review", summary="ارزیابی استاد: پذیرش نوبت یا درخواست اصلاح با بازخورد")
+@router.post("/submissions/{sub_id}/review", summary="ارزیابی نوبت در درس‌پروژه/تحقیق و ارائه (کارآموزی از این مسیر استفاده نمی‌کند)")
 def review_submission(sub_id: int, body: ReviewIn, user: User = Depends(get_current_user),
                       db: Session = Depends(get_db)):
     if body.decision not in ("approved", "needs_revision"):
@@ -286,18 +431,16 @@ def review_submission(sub_id: int, body: ReviewIn, user: User = Depends(get_curr
     r = db.get(PracticumRecord, s.record_id)
     if not r:
         raise HTTPException(status_code=404, detail="رکورد درس یافت نشد")
+    if r.course_type == "internship":
+        raise HTTPException(status_code=400,
+                            detail="ارزیابی کارآموزی با طیف لیکرت روی هر گزارش و سپس «تأیید نهایی» انجام می‌شود؛ "
+                                   "از گزینه‌های امتیاز طیف لیکرت استفاده کنید")
     if r.supervisor_id != user.id and not (set(user.roles or []) & {"research_manager", "system_admin"}):
         raise HTTPException(status_code=403, detail="فقط استاد مربوطه ارزیابی می‌کند")
     if s.status != "pending":
         raise HTTPException(status_code=400, detail="این نوبت قبلاً ارزیابی شده است")
     if body.decision == "approved" and body.score is not None and not (0 <= body.score <= 20):
         raise HTTPException(status_code=400, detail="نمره باید بین ۰ تا ۲۰ باشد")
-    if body.decision == "approved" and r.course_type == "internship":
-        need = max(MIN_WORK_REPORTS, r.min_reports or MIN_WORK_REPORTS)
-        if (r.report_count or 0) < need:
-            raise HTTPException(status_code=400,
-                                detail=f"برای تأیید نهایی کارآموزی، حداقل {need} گزارش کار لازم است — "
-                                       f"تاکنون {r.report_count or 0} گزارش ثبت شده است")
     s.status = body.decision
     s.feedback = body.feedback
     s.supervisor_note = body.supervisor_note
@@ -312,104 +455,119 @@ def review_submission(sub_id: int, body: ReviewIn, user: User = Depends(get_curr
         notify(db, r.student_id, "practicum_approved", "درس تأیید شد ✓",
                f"«{r.title}» پس از {r.round_count} نوبت تأیید نهایی شد"
                + (f" — نمره: {body.score}" if body.score is not None else "") + ".",
-               link="/internship" if r.course_type == "internship" else "/practicum")
+               link="/practicum")
         log_event(db, "practicum_approved", user.id,
                   {"record_id": r.id, "rounds": r.round_count, "score": body.score})
     else:
         r.status = "needs_revision"
         notify(db, r.student_id, "practicum_revision", f"نوبت {s.round_no}: اصلاح لازم",
                (body.feedback or "استاد بازخورد ثبت کرد؛ نسخهٔ اصلاح‌شده را در نوبت بعدی ارسال کنید."),
-               link="/internship" if r.course_type == "internship" else "/practicum")
+               link="/practicum")
         log_event(db, "practicum_revision_requested", user.id,
                   {"record_id": r.id, "round_no": s.round_no})
     db.commit()
-    return {"submission": _ser_submission(s), "record": _ser_record(r)}
+    return {"submission": _ser_submission(s), "record": _ser_record(r, db=db)}
 
 
-@router.post("/{rec_id}/schedule", summary="تعیین زمان‌بندی گزارش کار کارآموزی توسط استاد (روزانه/هفتگی)")
-def set_schedule(rec_id: int, body: ScheduleIn, user: User = Depends(get_current_user),
+@router.post("/submissions/{sub_id}/likert", summary="امتیاز طیف لیکرت استاد روی هر گزارش پیشرفت کارآموزی (۰ تا ۴)")
+def score_likert(sub_id: int, body: LikertIn, user: User = Depends(get_current_user),
                  db: Session = Depends(get_db)):
-    r = _get_record_checked(db, rec_id, user)
-    if r.supervisor_id != user.id and not (set(user.roles or []) & {"research_manager", "system_admin"}):
-        raise HTTPException(status_code=403, detail="فقط استاد مربوطه زمان‌بندی را تعیین می‌کند")
-    if r.course_type != "internship":
-        raise HTTPException(status_code=400, detail="زمان‌بندی گزارش کار مخصوص درس کارآموزی است")
-    if body.report_interval not in ("daily", "weekly"):
-        raise HTTPException(status_code=400, detail="زمان‌بندی باید daily یا weekly باشد")
-    if not (1 <= body.min_reports <= 30):
-        raise HTTPException(status_code=400, detail="حداقل گزارش باید عددی بین ۱ تا ۳۰ باشد")
-    need = max(MIN_WORK_REPORTS, body.min_reports)
-    r.report_interval = body.report_interval
-    r.min_reports = need
-    notify(db, r.student_id, "practicum_schedule",
-           "زمان‌بندی گزارش کار کارآموزی",
-           f"استاد مربوطه برای «{r.title}» گزارش کار {REPORT_INTERVAL_FA[body.report_interval]} تعیین کرد؛ "
-           f"برای تأیید نهایی، حداقل {need} گزارش کار در ترم لازم است.",
-           link="/internship")
-    log_event(db, "practicum_schedule_set", user.id,
-              {"record_id": r.id, "interval": body.report_interval, "min_reports": need})
-    db.commit()
-    return _ser_record(r)
-
-
-@router.post("/{rec_id}/work-reports", summary="ارسال گزارش کار کارآموزی (هفتگی/روزانه طبق زمان‌بندی استاد)")
-def submit_work_report(rec_id: int, body: WorkReportIn, user: User = Depends(get_current_user),
-                       db: Session = Depends(get_db)):
-    r = _get_record_checked(db, rec_id, user)
-    if r.student_id != user.id:
-        raise HTTPException(status_code=403, detail="فقط دانشجوی صاحب رکورد گزارش کار می‌فرستد")
-    if r.course_type != "internship":
-        raise HTTPException(status_code=400, detail="گزارش کار مخصوص درس کارآموزی است؛ برای درس‌پروژه از «گزارش پیشرفت» استفاده کنید")
-    if r.status == "approved":
-        raise HTTPException(status_code=400, detail="این درس تأیید نهایی شده است")
-    if r.status == "cancelled":
-        raise HTTPException(status_code=400, detail="این رکورد لغو شده است")
-    if not (body.title or "").strip():
-        raise HTTPException(status_code=400, detail="عنوان گزارش کار را بنویسید (مثلاً «گزارش هفتهٔ اول»)")
-    if body.hours is not None and not (0 <= body.hours <= 24 * 7):
-        raise HTTPException(status_code=400, detail="ساعت کارکرد نامعتبر است")
-    r.report_count = (r.report_count or 0) + 1
-    w = PracticumWorkReport(record_id=r.id, report_no=r.report_count, title=body.title.strip()[:300],
-                            content=body.content, hours=body.hours)
-    db.add(w)
-    notify(db, r.supervisor_id, "practicum_work_report",
-           f"گزارش کار {r.report_count} — کارآموزی",
-           f"{user.display_name} در «{r.title}» گزارش کار شمارهٔ {r.report_count} را ثبت کرد "
-           f"(زمان‌بندی {REPORT_INTERVAL_FA.get(r.report_interval or 'weekly', 'هفتگی')}).",
-           link="/internship")
-    log_event(db, "practicum_work_report_submitted", user.id,
-              {"record_id": r.id, "report_no": r.report_count})
-    db.commit()
-    return {"report": _ser_work_report(w), "record": _ser_record(r)}
-
-
-@router.post("/work-reports/{wr_id}/review", summary="ارزیابی گزارش کار توسط استاد: پذیرش یا اصلاح با بازخورد")
-def review_work_report(wr_id: int, body: ReviewIn, user: User = Depends(get_current_user),
-                       db: Session = Depends(get_db)):
-    if body.decision not in ("approved", "needs_revision"):
-        raise HTTPException(status_code=400, detail="تصمیم باید approved یا needs_revision باشد")
-    w = db.get(PracticumWorkReport, wr_id)
-    if not w:
-        raise HTTPException(status_code=404, detail="گزارش کار یافت نشد")
-    r = db.get(PracticumRecord, w.record_id)
+    if not isinstance(body.score, int) or not (0 <= body.score <= LIKERT_MAX):
+        raise HTTPException(status_code=400, detail="امتیاز طیف لیکرت باید عددی بین ۰ تا ۴ باشد")
+    s = db.get(PracticumSubmission, sub_id)
+    if not s:
+        raise HTTPException(status_code=404, detail="گزارش یافت نشد")
+    r = db.get(PracticumRecord, s.record_id)
     if not r:
         raise HTTPException(status_code=404, detail="رکورد درس یافت نشد")
+    if r.course_type != "internship":
+        raise HTTPException(status_code=400, detail="طیف لیکرت مخصوص گزارش‌های کارآموزی است")
     if r.supervisor_id != user.id and not (set(user.roles or []) & {"research_manager", "system_admin"}):
-        raise HTTPException(status_code=403, detail="فقط استاد مربوطه گزارش کار را ارزیابی می‌کند")
-    if w.status != "pending":
-        raise HTTPException(status_code=400, detail="این گزارش قبلاً ارزیابی شده است")
-    w.status = body.decision
-    w.feedback = body.feedback
-    w.reviewer_id = user.id
-    w.reviewed_at = now_utc()
-    notify(db, r.student_id, "practicum_work_report_reviewed",
-           f"گزارش کار {w.report_no}: {'پذیرفته شد ✓' if body.decision == 'approved' else 'اصلاح لازم'}",
-           body.feedback or "استاد مربوطه گزارش کار شما را ارزیابی کرد.",
+        raise HTTPException(status_code=403, detail="فقط استاد مربوطه گزارش را امتیاز می‌دهد")
+    if s.likert_score is not None:
+        raise HTTPException(status_code=400, detail="این گزارش قبلاً امتیاز گرفته است")
+    s.likert_score = body.score
+    s.status = "approved"
+    s.feedback = body.feedback
+    s.reviewer_id = user.id
+    s.reviewed_at = now_utc()
+    stats = _internship_stats(db, r)
+    notify(db, r.student_id, "practicum_likert",
+           f"گزارش پیشرفت {s.round_no}: امتیاز {body.score} از {LIKERT_MAX}",
+           (body.feedback or "استاد مربوطه گزارش شما را امتیاز داد.")
+           + f" — امتیاز تجمعی تاکنون: {min(SCORE_MAX, stats['likert_sum'])} از سقف {SCORE_MAX}.",
            link="/internship")
-    log_event(db, "practicum_work_report_reviewed", user.id,
-              {"record_id": r.id, "report_no": w.report_no, "decision": body.decision})
+    log_event(db, "practicum_likert_scored", user.id,
+              {"record_id": r.id, "round_no": s.round_no, "likert": body.score})
     db.commit()
-    return {"report": _ser_work_report(w), "record": _ser_record(r)}
+    return {"submission": _ser_submission(s), "record": _ser_record(r, db=db)}
+
+
+@router.post("/{rec_id}/accept", summary="پذیرش کارآموزی و تعیین زمان‌بندی گزارش پیشرفت توسط استاد (روزانه/هفتگی/دوهفته‌یکبار)")
+def accept_internship(rec_id: int, body: AcceptIn, user: User = Depends(get_current_user),
+                      db: Session = Depends(get_db)):
+    r = _get_record_checked(db, rec_id, user)
+    if r.supervisor_id != user.id and not (set(user.roles or []) & {"research_manager", "system_admin"}):
+        raise HTTPException(status_code=403, detail="فقط استاد مربوطه کارآموزی را پذیرش می‌کند")
+    if r.course_type != "internship":
+        raise HTTPException(status_code=400, detail="پذیرش و زمان‌بندی مخصوص درس کارآموزی است")
+    if body.report_interval not in INTERVAL_DAYS:
+        raise HTTPException(status_code=400, detail="زمان‌بندی باید daily، weekly یا biweekly باشد")
+    if not (1 <= body.min_reports <= 30):
+        raise HTTPException(status_code=400, detail="حداقل گزارش باید عددی بین ۱ تا ۳۰ باشد")
+    if r.status not in ("pending_acceptance", "active"):
+        raise HTTPException(status_code=400, detail="پذیرش فقط برای کارآموزیِ در انتظار پذیرش یا فعال ممکن است")
+    first_accept = r.status == "pending_acceptance"
+    need = max(MIN_PROGRESS_REPORTS, body.min_reports)
+    if first_accept:
+        r.accepted_at = now_utc()
+        r.status = "active"
+    r.report_interval = body.report_interval
+    r.min_reports = need
+    notify(db, r.student_id, "practicum_accepted", "کارآموزی پذیرفته شد ✓",
+           f"استاد مربوطه کارآموزی «{r.title}» را پذیرفت؛ زمان‌بندی گزارش پیشرفت: "
+           f"{REPORT_INTERVAL_FA[body.report_interval]} (حداقل {need} گزارش در ترم). "
+           f"از امروز طبق همین برنامه گزارش بفرستید — بدون نیاز به انتظار برای تأیید هر مرحله.",
+           link="/internship")
+    log_event(db, "practicum_accepted", user.id,
+              {"record_id": r.id, "interval": body.report_interval, "min_reports": need})
+    db.commit()
+    return _ser_record(r, db=db)
+
+
+@router.post("/{rec_id}/final-approve", summary="تأیید نهایی کارآموزی توسط استاد — نمره = سرجمع امتیاز لیکرت (سقف ۲۰)")
+def final_approve(rec_id: int, body: FinalIn, user: User = Depends(get_current_user),
+                  db: Session = Depends(get_db)):
+    r = _get_record_checked(db, rec_id, user)
+    if r.supervisor_id != user.id and not (set(user.roles or []) & {"research_manager", "system_admin"}):
+        raise HTTPException(status_code=403, detail="فقط استاد مربوطه تأیید نهایی را ثبت می‌کند")
+    if r.course_type != "internship":
+        raise HTTPException(status_code=400, detail="تأیید نهایی کارآموزی از مسیر ارزیابی نوبت‌ها انجام می‌شود")
+    if r.status != "active":
+        raise HTTPException(status_code=400, detail="کارآموزی در وضعیت قابل تأیید نیست")
+    need = max(MIN_PROGRESS_REPORTS, r.min_reports or MIN_PROGRESS_REPORTS)
+    if (r.round_count or 0) < need:
+        raise HTTPException(status_code=400,
+                            detail=f"برای تأیید نهایی، حداقل {need} گزارش پیشرفت لازم است — تاکنون {r.round_count or 0} گزارش ثبت شده")
+    stats = _internship_stats(db, r)
+    if stats["unscored_count"] > 0:
+        raise HTTPException(status_code=400,
+                            detail=f"{stats['unscored_count']} گزارش هنوز امتیاز طیف لیکرت نگرفته؛ ابتدا همهٔ گزارش‌ها را امتیاز دهید")
+    if stats["scored_count"] < need:
+        raise HTTPException(status_code=400, detail=f"تعداد گزارش‌های امتیازداده‌شده کمتر از حداقل {need} است")
+    r.status = "approved"
+    r.final_score = float(min(SCORE_MAX, stats["likert_sum"]))
+    r.supervisor_note = body.supervisor_note
+    r.approved_at = now_utc()
+    notify(db, r.student_id, "practicum_approved", "کارآموزی تأیید نهایی شد ✓",
+           f"«{r.title}» با {stats['scored_count']} گزارش پیشرفت تأیید شد؛ نمرهٔ نهایی کارآموزی: "
+           f"{r.final_score} از {SCORE_MAX} (سرجمع امتیاز طیف لیکرت).",
+           link="/internship")
+    log_event(db, "practicum_final_approved", user.id,
+              {"record_id": r.id, "reports": stats["scored_count"], "likert_sum": stats["likert_sum"],
+               "final_score": r.final_score})
+    db.commit()
+    return {"record": _ser_record(r, db=db)}
 
 
 @router.post("/{rec_id}/cancel", summary="لغو رکورد توسط دانشجو (پیش از تأیید نهایی)")

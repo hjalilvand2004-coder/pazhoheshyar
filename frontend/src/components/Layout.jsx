@@ -62,6 +62,7 @@ const MENUS = [
   { to: '/projects', label: 'پروژه‌های من', ic: '🗂️', roles: ['student', 'professor', 'research_manager', 'system_admin'] },
   { to: '/research', label: 'فضای پژوهش', ic: '📝', roles: ['student', 'professor', 'research_manager', 'system_admin'] },
   { to: '/internship', label: 'کارآموزی', ic: '🏭', adaptive: true, roles: ['student', 'professor', 'research_manager', 'system_admin'] },
+  { to: '/internship-dashboard', label: 'گزارش کارآموزی‌ها', ic: '📈', roles: ['research_manager', 'system_admin'] },
   { to: '/practicum', label: 'درس‌پروژه و تحقیق و ارائه', ic: '🛠️', adaptive: true, roles: ['student', 'professor', 'research_manager', 'system_admin'] },
   { to: '/lab', label: 'آزمایشگاه شبیه‌سازی', ic: '🧪', roles: ['student', 'professor', 'research_manager', 'system_admin'] },
   { to: '/ai', label: 'دستیار هوشمند', ic: '🤖', roles: ['student', 'professor', 'research_manager'] },

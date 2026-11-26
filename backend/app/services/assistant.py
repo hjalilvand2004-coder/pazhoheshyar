@@ -22,12 +22,13 @@ from ..core.config import LLM_API_KEY, LLM_API_URL, LLM_MODEL, LLM_TIMEOUT_SECON
 from ..core.database import get_db
 from ..core.security import decode_token
 from ..core.utils import now_utc
-from ..models import (AiSuggestionLog, Notification, PracticumRecord, Project,
-                      ProjectMember, ProjectTask, ResearchProfile, ResearchRequest, User)
+from ..models import (AiSuggestionLog, Notification, PracticumRecord, PracticumSubmission,
+                      Project, ProjectMember, ProjectTask, ResearchProfile, ResearchRequest, User)
 
 router = APIRouter(tags=["دستیار هوشمند (ویجت)"])
 
-REPORT_INTERVAL_FA = {"daily": "روزانه", "weekly": "هفتگی"}
+REPORT_INTERVAL_FA = {"daily": "روزانه", "weekly": "هفتگی", "biweekly": "دوهفته‌یکبار"}
+INTERVAL_DAYS = {"daily": 1, "weekly": 7, "biweekly": 14}
 REQ_STATUS_FA = {
     "draft": "پیش‌نویس", "published": "منتشرشده", "offers_received": "دریافت پیشنهاد",
     "negotiating": "در حال مذاکره", "initial_agreement": "توافق اولیه",
@@ -35,7 +36,8 @@ REQ_STATUS_FA = {
     "cancelled": "لغوشده", "expired": "منقضی‌شده", "closed_no_agreement": "بسته‌شده",
 }
 REC_STATUS_FA = {
-    "active": "فعال", "awaiting_review": "در انتظار ارزیابی استاد", "needs_revision": "نیازمند اصلاح",
+    "pending_acceptance": "در انتظار پذیرش استاد", "active": "فعال",
+    "awaiting_review": "در انتظار ارزیابی استاد", "needs_revision": "نیازمند اصلاح",
     "approved": "تأییدشده", "cancelled": "لغوشده",
 }
 COURSE_FA = {"internship": "کارآموزی", "course_project": "درس‌پروژه", "research_presentation": "تحقیق و ارائه"}
@@ -43,9 +45,9 @@ COURSE_FA = {"internship": "کارآموزی", "course_project": "درس‌پر�
 WIDGET_TITLE = "دستیار هوشمند پژوهشیار۳۶۰"
 WIDGET_SUBTITLE = "متصل به هستهٔ «دانشگاه هوشمند من»"
 WIDGET_GREETING = ("سلام! دستیار هوشمند «دانشگاه هوشمند من» در پژوهشیار۳۶۰ هستم؛ "
-                   "از وضعیت پژوهشی، کارآموزی و گزارش کار، درس‌پروژه، پروژه‌ها و درخواست‌هایتان بپرسید "
+                   "از وضعیت پژوهشی، کارآموزی و گزارش پیشرفت، درس‌پروژه، پروژه‌ها و درخواست‌هایتان بپرسید "
                    "تا بر اساس آخرین داده‌های همین سامانه راهنمایی‌تان کنم.")
-WIDGET_QUICK = ["وضعیت من را خلاصه کن", "وضعیت کارآموزی من", "گزارش کار بعدی من",
+WIDGET_QUICK = ["وضعیت من را خلاصه کن", "وضعیت کارآموزی من", "گزارش پیشرفت بعدی من",
                 "پروژه‌های من", "راهنمای سامانه"]
 
 # نشست‌های چت در حافظه — تک‌پردازه‌ای (uvicorn تک‌ورکر)؛ تاریخچهٔ هر نشست محدود و پاک‌سازی می‌شود
@@ -100,15 +102,19 @@ def _student_context(db: Session, user: User) -> dict:
             .order_by(PracticumRecord.created_at.desc()).all())
     practicum = []
     for r in recs:
-        interval_days = 1 if (r.report_interval or "weekly") == "daily" else 7
+        subs = (db.query(PracticumSubmission)
+                .filter(PracticumSubmission.record_id == r.id).all())
+        scored = [s.likert_score for s in subs if s.likert_score is not None]
         practicum.append({
             "course": COURSE_FA.get(r.course_type, r.course_type),
             "title": r.title,
             "status": REC_STATUS_FA.get(r.status, r.status),
             "progress_rounds": r.round_count,
-            "work_report_interval": REPORT_INTERVAL_FA.get(r.report_interval or "weekly", "هفتگی"),
-            "work_reports_sent": r.report_count,
-            "min_required_work_reports": r.min_reports,
+            "report_interval": REPORT_INTERVAL_FA.get(r.report_interval or "weekly", "هفتگی"),
+            "reports_sent": r.round_count,
+            "min_required_reports": r.min_reports,
+            "current_score": min(20, sum(scored)),
+            "unscored_reports": r.round_count - len(scored),
             "final_score": r.final_score,
             "supervisor_id": r.supervisor_id,
         })
@@ -156,13 +162,20 @@ def _internship_lines(ctx: dict, sup_names: dict[int, str]) -> list[str]:
     for r in ctx["practicum_records"]:
         if r["course"] != "کارآموزی":
             continue
-        sent, need = r["work_reports_sent"], r["min_required_work_reports"]
-        interval_days = 1 if r["work_report_interval"] == "روزانه" else 7
+        sent, need = r["reports_sent"], r["min_required_reports"]
+        interval_days = INTERVAL_DAYS.get(
+            next((k for k, v in REPORT_INTERVAL_FA.items() if v == r["report_interval"]), "weekly"), 7)
+        if r["status"] == "در انتظار پذیرش استاد":
+            lines.append(f"• «{r['title']}» — در انتظار پذیرش و تعیین زمان‌بندی توسط "
+                         f"استاد مربوطه ({sup_names.get(r['supervisor_id'], '—')})")
+            continue
         nxt = f"حداکثر تا {_fa_num(interval_days)} روز دیگر"
         lines.append(
             f"• «{r['title']}» — وضعیت: {r['status']} · استاد مربوطه: {sup_names.get(r['supervisor_id'], '—')} · "
-            f"زمان‌بندی گزارش کار: {r['work_report_interval']} · گزارش‌های ارسال‌شده: {_fa_num(sent)} از حداقل "
-            f"{_fa_num(need)} · سررسید پیشنهادی گزارش بعدی: {nxt}"
+            f"زمان‌بندی گزارش پیشرفت: {r['report_interval']} · گزارش‌های ثبت‌شده: {_fa_num(sent)} از حداقل "
+            f"{_fa_num(need)} · امتیاز تجمعی لیکرت: {_fa_num(r['current_score'])} از سقف ۲۰ · "
+            f"گزارش بعدی: {nxt}"
+            + (f" · {_fa_num(r['unscored_reports'])} گزارش در انتظار امتیاز استاد" if r["unscored_reports"] else "")
             + (f" · نمرهٔ نهایی: {_fa_num(r['final_score'])}" if r["final_score"] is not None else ""))
     return lines
 
@@ -184,20 +197,24 @@ def _rule_reply(text: str, ctx: dict | None, db: Session, user: User | None) -> 
         return (f"سلام {ctx['name']}! 👋 من دستیار هوشمند شما هستم. "
                 "از وضعیت کارآموزی و گزارش کار، درس‌پروژه، پروژه‌های پژوهشی یا اعلان‌هایتان بپرسید.")
 
-    if has("گزارش کار", "گزارش هفتگی", "گزارش روزانه", "سررسید", "گزارش بعدی"):
+    if has("گزارش کار", "گزارش پیشرفت", "گزارش هفتگی", "گزارش روزانه", "سررسید", "گزارش بعدی", "لیکرت"):
         if int_lines:
-            return ("زمان‌بندی گزارش کار کارآموزی را استاد مربوطه تعیین می‌کند (روزانه یا هفتگی) و برای "
-                    "تأیید نهایی کارآموزی، حداقل ۵ گزارش در ترم لازم است:\n" + "\n".join(int_lines) +
-                    "\nبرای ارسال، منوی «کارآموزی» ← نمایش رکورد ← فرم «گزارش کار».")
+            return ("پس از پذیرش استاد، زمان‌بندی گزارش پیشرفت کارآموزی مشخص می‌شود (روزانه، هفتگی یا "
+                    "دوهفته‌یکبار) و از لحظهٔ پذیرش طبق همان برنامه گزارش می‌فرستید — بدون نیاز به انتظار "
+                    "برای تأیید هر مرحله. استاد هر گزارش را با طیف لیکرت ۰ تا ۴ امتیاز می‌دهد و سرجمع "
+                    "امتیازها (سقف ۲۰) نمرهٔ کارآموزی از ۲۰ می‌شود؛ حداقل ۵ گزارش در ترم لازم است:\n"
+                    + "\n".join(int_lines) +
+                    "\nبرای ارسال، منوی «کارآموزی» ← نمایش رکورد ← «ثبت گزارش پیشرفت».")
         return "رکورد کارآموزی فعالی ندارید؛ از منوی «کارآموزی» با انتخاب استاد مربوطه ثبتش کنید."
 
     if has("کارآموزی"):
         if int_lines:
             return ("وضعیت کارآموزی شما بر اساس آخرین دادهٔ سامانه:\n" + "\n".join(int_lines) +
-                    "\nیادآوری: بدون حداقل ۵ گزارش کار، استاد نمی‌تواند کارآموزی را تأیید نهایی کند.")
+                    "\nیادآوری: گزارش‌ها را طبق زمان‌بندی بفرستید؛ بدون حداقل ۵ گزارش پیشرفت و امتیاز همهٔ "
+                    "گزارش‌ها، تأیید نهایی ممکن نیست و نمرهٔ کارآموزی = سرجمع امتیازهای لیکرت (سقف ۲۰).")
         return ("رکورد کارآموزی ثبت نکرده‌اید. از منوی «کارآموزی» فرم ثبت را باز کنید: استاد مربوطه، "
-                "عنوان محل کارآموزی و نیم‌سال را وارد کنید. پس از تأیید استاد، زمان‌بندی گزارش کار "
-                "(روزانه/هفتگی) همان‌جا مشخص می‌شود.")
+                "عنوان محل کارآموزی و نیم‌سال را وارد کنید. پس از پذیرش استاد، زمان‌بندی گزارش پیشرفت "
+                "(روزانه/هفتگی/دوهفته‌یکبار) مشخص می‌شود و از لحظهٔ پذیرش، ارسال گزارش طبق برنامه آزاد است.")
 
     if has("درس‌پروژه", "درس پروژه", "تحقیق و ارائه"):
         rows = [r for r in ctx["practicum_records"] if r["course"] in ("درس‌پروژه", "تحقیق و ارائه")]
@@ -280,7 +297,7 @@ SYSTEM_PROMPT = """تو «دستیار هوشمند دانشگاه هوشمند 
 1) فقط بر اساس «کانتکست واقعی دانشجو» که در پیام سیستم داده می‌شود پاسخ بده؛ هیچ عدد، نمره، تاریخ یا وضعیت از خودت نساز.
 2) اگر داده‌ای در کانتکست نیست، صادقانه بگو «این مورد در سامانه ثبت نشده» و راهنمایی عمومی بده.
 3) فارسی روان، لحن دوستانه و کوتاه (حداکثر ۸ خط)، از بولت استفاده کن، راهکار عملی بده.
-4) دربارهٔ کارآموزی یادآوری کن: زمان‌بندی گزارش کار (روزانه/هفتگی) را استاد تعیین می‌کند و حداقل ۵ گزارش کار در ترم برای تأیید نهایی لازم است.
+4) دربارهٔ کارآموزی یادآوری کن: پس از پذیرش استاد، زمان‌بندی گزارش پیشرفت (روزانه/هفتگی/دوهفته‌یکبار) مشخص می‌شود و دانشجو از لحظهٔ پذیرش بدون انتظار تأیید مرحله‌ای گزارش می‌فرستد؛ استاد هر گزارش را با طیف لیکرت ۰ تا ۴ امتیاز می‌دهد، سرجمع امتیازها (سقف ۲۰) نمرهٔ از ۲۰ است و حداقل ۵ گزارش در ترم برای تأیید نهایی لازم است.
 5) تصمیم‌های اداری و نمره با استاد/دانشگاه است؛ تو فقط راهنمایی می‌کنی."""
 
 

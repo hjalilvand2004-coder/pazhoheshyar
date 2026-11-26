@@ -122,13 +122,15 @@ def _migrate_sso_columns():
 
 
 def _migrate_practicum_columns():
-    """افزودن ستون‌های زمان‌بندی گزارش کار کارآموزی به دیتابیس‌های قدیمی‌تر (بدون از دست رفتن داده)."""
+    """ستون‌های گردش کار جدید کارآموزی (پذیرش + طیف لیکرت) + اصلاح داده‌های قدیمی، بدون از دست رفتن داده."""
     from sqlalchemy import text
     from .core.database import engine
     new_cols = [
         ("report_interval", "VARCHAR(20) DEFAULT 'weekly' NOT NULL"),
         ("min_reports", "INTEGER DEFAULT 5 NOT NULL"),
         ("report_count", "INTEGER DEFAULT 0 NOT NULL"),
+        ("accepted_at", "DATETIME NULL"),
+        ("likert_score", "INTEGER NULL"),
     ]
     try:
         with engine.begin() as conn:
@@ -137,6 +139,18 @@ def _migrate_practicum_columns():
                 for name, ddl in new_cols:
                     if name not in existing:
                         conn.execute(text(f"ALTER TABLE practicum_records ADD COLUMN {name} {ddl}"))
+                # مبدأ زمان‌بندی گزارش‌ها برای رکوردهای قدیمی فعال/تأییدشده = زمان ثبت
+                conn.execute(text(
+                    "UPDATE practicum_records SET accepted_at = created_at "
+                    "WHERE course_type = 'internship' AND accepted_at IS NULL "
+                    "AND status IN ('active','approved')"))
+                # گردش کار جدید: کارآموزی «در انتظار ارزیابی/نیازمند اصلاح» به «فعال» می‌رود
+                conn.execute(text(
+                    "UPDATE practicum_records SET status = 'active' "
+                    "WHERE course_type = 'internship' AND status IN ('awaiting_review','needs_revision')"))
+            subs = {row[1] for row in conn.execute(text("PRAGMA table_info(practicum_submissions)"))}
+            if subs and "likert_score" not in subs:
+                conn.execute(text("ALTER TABLE practicum_submissions ADD COLUMN likert_score INTEGER NULL"))
     except Exception:
         pass  # دیتابیس تازه ساخته می‌شود / موتور غیر SQLite — create_all ستون‌ها را دارد
 

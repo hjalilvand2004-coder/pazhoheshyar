@@ -2,10 +2,12 @@ import React, { useEffect, useState } from 'react'
 import { api, toFa, fmtDateTime } from '../api.js'
 
 export const STATUS_BADGE = {
-  active: 'gray', awaiting_review: 'amber', needs_revision: 'red', approved: 'green', cancelled: 'gray',
+  pending_acceptance: 'amber', active: 'gray', awaiting_review: 'amber', needs_revision: 'red',
+  approved: 'green', cancelled: 'gray',
 }
-export const WORK_BADGE = { pending: 'amber', approved: 'green', needs_revision: 'red' }
-export const INTERVAL_FA = { daily: 'روزانه', weekly: 'هفتگی' }
+export const INTERVAL_FA = { daily: 'روزانه', weekly: 'هفتگی', biweekly: 'دوهفته‌یکبار' }
+export const LIKERT_LABELS = ['۰ — خیلی ضعیف', '۱ — ضعیف', '۲ — متوسط', '۳ — خوب', '۴ — عالی']
+export const SCORE_MAX = 20   // سرجمع امتیاز لیکرت با سقف ۲۰ = نمرهٔ نهایی کارآموزی
 
 export async function downloadFile(fileId, name) {
   const { getToken } = await import('../api.js')
@@ -72,156 +74,191 @@ export function CreateForm({ meta, onDone, onlyType, title = '➕ ثبت درس 
       <textarea rows={2} placeholder="شرح کوتاه…"
                 value={draft.description} onChange={e => setDraft({ ...draft, description: e.target.value })} />
       <div className="row" style={{ marginTop: 10 }}>
-        <button className="btn" onClick={create} disabled={busy}>{busy ? 'در حال ثبت…' : 'ثبت درس و اطلاع به استاد'}</button>
+        <button className="btn" onClick={create} disabled={busy}>{busy ? 'در حال ثبت…' : 'ثبت و ارسال برای استاد'}</button>
       </div>
     </div>
   )
 }
 
-/* تنظیم زمان‌بندی گزارش کار کارآموزی — فقط استاد مربوطه */
-function ScheduleCard({ rec, onChanged }) {
-  const [draft, setDraft] = useState({ report_interval: rec.report_interval || 'weekly', min_reports: rec.min_reports || 5 })
+/* پذیرش کارآموزی و تعیین زمان‌بندی گزارش پیشرفت — فقط استاد مربوطه */
+export function AcceptCard({ rec, onChanged }) {
+  const [draft, setDraft] = useState({
+    report_interval: rec.report_interval || 'weekly',
+    min_reports: rec.min_reports || 5,
+  })
   const [busy, setBusy] = useState(false)
+  const isPending = rec.status === 'pending_acceptance'
 
   const save = async () => {
     setBusy(true)
     try {
-      await api(`/practicum/${rec.id}/schedule`, { method: 'POST', body: { ...draft, min_reports: Number(draft.min_reports) } })
+      await api(`/practicum/${rec.id}/accept`, { method: 'POST', body: { ...draft, min_reports: Number(draft.min_reports) } })
       onChanged()
     } catch (e) { alert(e.message) } finally { setBusy(false) }
   }
 
   return (
     <div className="card" style={{ borderRight: '4px solid var(--warn)' }}>
-      <h4>🗓️ زمان‌بندی گزارش کار (تعیین استاد مربوطه)</h4>
+      <h4>{isPending ? '✅ پذیرش کارآموزی و تعیین زمان‌بندی گزارش پیشرفت' : '🗓️ تغییر زمان‌بندی گزارش پیشرفت'}</h4>
       <div className="hint">
-        مسیر گزارش کار به زمان‌بندی شما وابسته است: برخی اساتید گزارش روزانه می‌خواهند و برخی هفتگی.
-        در طول یک ترم حداقل {toFa(Math.max(5, Number(draft.min_reports) || 5))} گزارش کار برای تأیید نهایی کارآموزی لازم است.
+        با پذیرش، مبدأ زمان‌بندی از «تاریخ امروز» ثبت می‌شود و دانشجو از همان لحظه طبق برنامه
+        گزارش پیشرفت می‌فرستد — بدون نیاز به تأیید هر مرحله. سرجمع امتیاز طیف لیکرت (۰ تا ۴)
+        با سقف ۲۰، نمرهٔ کارآموزی از ۲۰ می‌شود.
       </div>
       <div className="row" style={{ gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
         <select value={draft.report_interval} onChange={e => setDraft({ ...draft, report_interval: e.target.value })} style={{ maxWidth: 220 }}>
-          <option value="weekly">گزارش هفتگی</option>
           <option value="daily">گزارش روزانه</option>
+          <option value="weekly">گزارش هفتگی</option>
+          <option value="biweekly">گزارش دوهفته‌یکبار</option>
         </select>
         <input type="number" min="5" max="30" style={{ maxWidth: 220 }}
                value={draft.min_reports}
                onChange={e => setDraft({ ...draft, min_reports: e.target.value })}
-               title="حداقل تعداد گزارش کار در ترم" />
-        <button className="btn small" onClick={save} disabled={busy}>{busy ? 'در حال ثبت…' : 'ثبت زمان‌بندی و اطلاع به دانشجو'}</button>
+               title="حداقل تعداد گزارش پیشرفت در ترم" />
+        <button className="btn small" onClick={save} disabled={busy}>
+          {busy ? 'در حال ثبت…' : isPending ? 'پذیرش و اطلاع به دانشجو' : 'ثبت زمان‌بندی جدید'}
+        </button>
+      </div>
+      {!isPending && (
+        <div className="hint" style={{ marginTop: 6 }}>
+          وضعیت فعلی: {INTERVAL_FA[rec.report_interval] || 'هفتگی'} · مبدأ زمان‌بندی: {fmtDateTime(rec.accepted_at)} ·
+          ثبت‌شده: {toFa(rec.round_count)} از حداقل {toFa(rec.min_reports)}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* فرم ثبت گزارش پیشرفت — دانشجو؛ در کارآموزی بدون انتظار تأیید مرحله‌ای */
+export function SubmissionForm({ rec, onDone, internship }) {
+  const [note, setNote] = useState('')
+  const [files, setFiles] = useState([])
+  const [busy, setBusy] = useState(false)
+
+  const submit = async () => {
+    if (!note.trim() && files.length === 0) return alert('متن گزارش یا حداقل یک فایل لازم است')
+    setBusy(true)
+    try {
+      await api(`/practicum/${rec.id}/submissions`, { method: 'POST', form: (() => {
+        const fd = new FormData()
+        fd.append('note', note)
+        files.forEach(f => fd.append('files', f))
+        return fd
+      })() })
+      setNote(''); setFiles([]); document.getElementById('practicum-files') && (document.getElementById('practicum-files').value = '')
+      onDone()
+    } catch (e) { alert(e.message) } finally { setBusy(false) }
+  }
+
+  return (
+    <div className="card">
+      <h4>📤 ثبت گزارش پیشرفت — {internship ? `شمارهٔ ${toFa(rec.round_count + 1)} طبق زمان‌بندی` : `نوبت ${toFa(rec.round_count + 1)}`}</h4>
+      {internship ? (
+        <div className="hint">
+          زمان‌بندی تعیین‌شدهٔ استاد: <b>{INTERVAL_FA[rec.report_interval] || 'هفتگی'}</b> (از {fmtDateTime(rec.accepted_at)}) ·
+          تاکنون {toFa(rec.round_count)} گزارش از حداقل {toFa(rec.min_reports)} ·
+          گزارش‌ها را طبق برنامه بفرستید — نیازی به انتظار برای تأیید مرحلهٔ قبلی نیست؛ استاد هر گزارش را
+          با طیف لیکرت ۰ تا ۴ امتیاز می‌دهد و سرجمع امتیازها نمرهٔ کارآموزی از ۲۰ می‌شود.
+        </div>
+      ) : (
+        <div className="hint">گزارش این نوبت را بفرستید؛ پس از بازخورد استاد، اصلاحات را در نوبت بعدی ارسال کنید.</div>
+      )}
+      <textarea rows={3}
+                placeholder={internship
+                  ? 'چه کارهایی در این بازه انجام دادید؟ چه آموختید؟ مشکلات و راه‌حل‌ها…'
+                  : 'خلاصهٔ کار انجام‌شده در این نوبت، اصلاحات انجام‌شده طبق بازخورد استاد…'}
+                value={note} onChange={e => setNote(e.target.value)} />
+      <div className="row" style={{ marginTop: 8 }}>
+        <input type="file" id="practicum-files" multiple
+               onChange={e => setFiles([...(e.target.files || [])])} />
+        <button className="btn" onClick={submit} disabled={busy}>
+          {busy ? 'در حال ارسال…' : internship ? 'ثبت گزارش پیشرفت' : 'ارسال برای ارزیابی استاد'}
+        </button>
       </div>
       <div className="hint" style={{ marginTop: 6 }}>
-        وضعیت فعلی: {INTERVAL_FA[rec.report_interval] || 'هفتگی'} · ارسال‌شده: {toFa(rec.report_count)} از حداقل {toFa(rec.min_reports)}
+        حداکثر ۵ فایل و هر فایل تا ۱۵ مگابایت (گزارش، پیوست کد، عکس محیط کارآموزی و…).
       </div>
     </div>
   )
 }
 
-/* فرم گزارش کار کارآموزی — دانشجو */
-function WorkReportForm({ rec, onDone }) {
-  const [draft, setDraft] = useState({ title: '', content: '', hours: '' })
+/* امتیاز طیف لیکرت استاد روی یک گزارش پیشرفت (۰ تا ۴) */
+export function LikertScorer({ sub, rec, onDone }) {
+  const [draft, setDraft] = useState({ score: '', feedback: '' })
   const [busy, setBusy] = useState(false)
 
-  const submit = async () => {
-    if (!draft.title.trim()) return alert('عنوان گزارش کار را بنویسید (مثلاً «گزارش هفتهٔ اول»)')
-    if (!draft.content.trim()) return alert('شرح کار انجام‌شده را بنویسید')
+  const save = async () => {
+    if (draft.score === '') return alert('امتیاز طیف لیکرت (۰ تا ۴) را انتخاب کنید')
     setBusy(true)
     try {
-      await api(`/practicum/${rec.id}/work-reports`, { method: 'POST', body: {
-        title: draft.title, content: draft.content,
-        hours: draft.hours === '' ? null : Number(draft.hours) } })
-      setDraft({ title: '', content: '', hours: '' })
+      await api(`/practicum/submissions/${sub.id}/likert`, { method: 'POST', body: {
+        score: Number(draft.score), feedback: draft.feedback } })
       onDone()
     } catch (e) { alert(e.message) } finally { setBusy(false) }
   }
 
-  const n = (rec.report_count || 0) + 1
   return (
-    <div className="card">
-      <h4>📝 ارسال گزارش کار — شمارهٔ {toFa(n)}</h4>
-      <div className="hint">
-        زمان‌بندی تعیین‌شدهٔ استاد: <b>{INTERVAL_FA[rec.report_interval] || 'هفتگی'}</b> · برای تأیید نهایی کارآموزی
-        حداقل <b>{toFa(rec.min_reports)}</b> گزارش کار در ترم لازم است. تاکنون: {toFa(rec.report_count)} گزارش.
-      </div>
-      <input placeholder="مثلاً: گزارش هفتهٔ اول — آشنایی با محیط کار و وظایف"
-             value={draft.title} onChange={e => setDraft({ ...draft, title: e.target.value })} />
-      <textarea rows={3} placeholder="چه کارهایی انجام دادید؟ چه آموختید؟ مشکلات و راه‌حل‌ها…"
-                value={draft.content} onChange={e => setDraft({ ...draft, content: e.target.value })} />
-      <div className="row" style={{ marginTop: 8 }}>
-        <input type="number" min="0" step="0.5" placeholder="ساعت کارکرد (اختیاری)" style={{ maxWidth: 220 }}
-               value={draft.hours} onChange={e => setDraft({ ...draft, hours: e.target.value })} />
-        <button className="btn" onClick={submit} disabled={busy}>
-          {busy ? 'در حال ارسال…' : 'ثبت گزارش کار و اطلاع به استاد'}
+    <div style={{ marginTop: 6, borderTop: '1px dashed var(--border)', paddingTop: 6 }}>
+      <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+        <select value={draft.score} onChange={e => setDraft({ ...draft, score: e.target.value })} style={{ maxWidth: 200 }}>
+          <option value="">— امتیاز طیف لیکرت —</option>
+          {LIKERT_LABELS.map((l, i) => <option key={i} value={i}>{l}</option>)}
+        </select>
+        <input placeholder="بازخورد کوتاه (اختیاری)" style={{ flex: 1, minWidth: 160 }}
+               value={draft.feedback} onChange={e => setDraft({ ...draft, feedback: e.target.value })} />
+        <button className="btn small" onClick={save} disabled={busy}>
+          {busy ? 'در حال ثبت…' : 'ثبت امتیاز'}
         </button>
       </div>
     </div>
   )
 }
 
-/* فهرست گزارش‌های کار + ارزیابی استاد */
-function WorkReportsCard({ rec, isSupervisor, onChanged }) {
-  const [review, setReview] = useState({ id: null, feedback: '' })
-  const rows = rec.work_reports || []
+/* تأیید نهایی کارآموزی — استاد؛ نمره = سرجمع امتیاز لیکرت (سقف ۲۰) */
+export function FinalApproveCard({ rec, onDone }) {
+  const [note, setNote] = useState('')
+  const [busy, setBusy] = useState(false)
+  const minOk = (rec.round_count || 0) >= (rec.min_reports || 5)
+  const allScored = (rec.unscored_count || 0) === 0
 
-  const doReview = async (wid, decision) => {
+  const approve = async () => {
+    setBusy(true)
     try {
-      await api(`/practicum/work-reports/${wid}/review`, { method: 'POST', body: {
-        decision, feedback: review.feedback } })
-      setReview({ id: null, feedback: '' })
-      onChanged()
-    } catch (e) { alert(e.message) }
+      await api(`/practicum/${rec.id}/final-approve`, { method: 'POST', body: { supervisor_note: note } })
+      onDone()
+    } catch (e) { alert(e.message) } finally { setBusy(false) }
   }
 
   return (
-    <div className="card">
-      <h4>📔 گزارش‌های کار ({toFa(rows.length)}) — زمان‌بندی: {INTERVAL_FA[rec.report_interval] || 'هفتگی'}</h4>
-      <div className="rounds">
-        {rows.map(w => (
-          <div key={w.id} className="round-item">
-            <div className="round-head">
-              <b>گزارش {toFa(w.report_no)}</b>
-              <span className={`badge ${WORK_BADGE[w.status]}`}>{w.status_fa}</span>
-              <span className="hint">{fmtDateTime(w.created_at)}</span>
-              {w.hours != null && <span className="badge teal">{toFa(w.hours)} ساعت</span>}
-            </div>
-            <b style={{ fontSize: 13.2 }}>{w.title}</b>
-            {w.content && <div style={{ fontSize: 13.2 }}>{w.content}</div>}
-            {w.status !== 'pending' && w.feedback && (
-              <div className="feedback-box">
-                <b style={{ color: w.status === 'approved' ? 'var(--success)' : 'var(--warn)' }}>
-                  {w.status === 'approved' ? '✅ بازخورد استاد (تأیید):' : '↩️ بازخورد استاد (اصلاح لازم):'}
-                </b> {w.feedback}
-                <div className="hint" style={{ marginTop: 2 }}>{fmtDateTime(w.reviewed_at)}</div>
-              </div>
-            )}
-            {isSupervisor && w.status === 'pending' && (
-              review.id === w.id ? (
-                <div style={{ marginTop: 6 }}>
-                  <textarea rows={2} placeholder="بازخورد استاد…" value={review.feedback}
-                            onChange={e => setReview({ ...review, feedback: e.target.value })} />
-                  <div className="row" style={{ gap: 6, marginTop: 6 }}>
-                    <button className="btn secondary small" onClick={() => doReview(w.id, 'needs_revision')}>↩️ اصلاح لازم</button>
-                    <button className="btn small" onClick={() => doReview(w.id, 'approved')}>✅ پذیرش گزارش</button>
-                  </div>
-                </div>
-              ) : (
-                <button className="btn ghost small" style={{ marginTop: 6 }}
-                        onClick={() => setReview({ id: w.id, feedback: '' })}>🧑‍⚖️ ارزیابی این گزارش</button>
-              )
-            )}
-          </div>
-        ))}
-        {rows.length === 0 && <div className="empty">هنوز گزارش کاری ثبت نشده است.</div>}
+    <div className="card" style={{ borderRight: '4px solid var(--accent)' }}>
+      <h4>🏁 تأیید نهایی کارآموزی</h4>
+      <div className="hint">
+        وقتی کار شما با دانشجو تمام شد، تأیید نهایی را بزنید. نمرهٔ نهایی از سرجمع امتیاز طیف لیکرت
+        گزارش‌ها محاسبه می‌شود: <b>امتیاز فعلی {toFa(rec.current_score ?? 0)} — نمرهٔ نهایی از ۲۰</b>
+        {' '}(۵ گزارش کامل با امتیاز عالی = نمرهٔ ۲۰).
+      </div>
+      <ul style={{ margin: '6px 0', paddingRight: 18, fontSize: 13 }}>
+        <li>{minOk ? '✅' : '⬜'} حداقل گزارش‌ها: {toFa(rec.round_count)} از {toFa(rec.min_reports || 5)}</li>
+        <li>{allScored ? '✅' : '⬜'} امتیاز همهٔ گزارش‌ها ثبت شده
+          {(rec.unscored_count || 0) > 0 && ` — ${toFa(rec.unscored_count)} گزارش بدون امتیاز`}</li>
+      </ul>
+      <textarea rows={2} placeholder="جمع‌بندی استاد (اختیاری)…" value={note} onChange={e => setNote(e.target.value)} />
+      <div className="row" style={{ marginTop: 8 }}>
+        <button className="btn" onClick={approve} disabled={busy || !minOk || !allScored}
+                title={(!minOk || !allScored) ? 'ابتدا شرط‌های بالا را کامل کنید' : ''}>
+          {busy ? 'در حال ثبت…' : '✅ تأیید نهایی کارآموزی'}
+        </button>
+      </div>
+      <div className="hint" style={{ marginTop: 6 }}>
+        پس از تأیید، این کارآموزی در «گزارش کارآموزی‌ها» برای مدیرآموزش/مدیرگروه با نمرهٔ نهایی ثبت می‌شود.
       </div>
     </div>
   )
 }
 
-/* نمای کامل رکورد — درس‌پروژه/تحقیق و ارائه با چرخهٔ نوبت‌ها؛ کارآموزی با گزارش کار اضافه */
+/* نمای کامل رکورد — درس‌پروژه/تحقیق و ارائه با چرخهٔ نوبت‌ها؛ کارآموزی با گردش پذیرش/لیکرت/تأیید نهایی */
 export function RecordDetail({ id, onBack, user }) {
   const [rec, setRec] = useState(null)
-  const [note, setNote] = useState('')
-  const [files, setFiles] = useState([])
-  const [busy, setBusy] = useState(false)
   const [review, setReview] = useState({ feedback: '', score: '' })
 
   const load = () => api(`/practicum/${id}`).then(setRec).catch(e => alert(e.message))
@@ -232,28 +269,19 @@ export function RecordDetail({ id, onBack, user }) {
   const isSupervisor = user.id === rec.supervisor_id
   const isInternship = rec.course_type === 'internship'
   const openRound = rec.submissions.find(s => s.status === 'pending')
-  const workOk = !isInternship || (rec.report_count || 0) >= (rec.min_reports || 5)
-  const flow = [
-    [isInternship ? 'گزارش‌های کار' : 'ارسال گزارش', isInternship ? (rec.report_count || 0) > 0 : rec.round_count > 0],
-    ['ارزیابی استاد', rec.submissions.some(s => s.status !== 'pending')],
-    ['اصلاح و نوبت بعد', rec.submissions.some(s => s.status === 'needs_revision')],
-    ['تأیید نهایی', rec.status === 'approved'],
-  ]
-
-  const submit = async () => {
-    if (!note.trim() && files.length === 0) return alert('متن گزارش یا حداقل یک فایل لازم است')
-    setBusy(true)
-    try {
-      await api(`/practicum/${id}/submissions`, { method: 'POST', form: (() => {
-        const fd = new FormData()
-        fd.append('note', note)
-        files.forEach(f => fd.append('files', f))
-        return fd
-      })() })
-      setNote(''); setFiles([]); document.getElementById('practicum-files') && (document.getElementById('practicum-files').value = '')
-      load()
-    } catch (e) { alert(e.message) } finally { setBusy(false) }
-  }
+  const flow = isInternship
+    ? [
+        ['ثبت کارآموزی', true],
+        ['پذیرش و زمان‌بندی استاد', !!rec.accepted_at],
+        ['گزارش‌های پیشرفت', (rec.round_count || 0) > 0],
+        ['تأیید نهایی', rec.status === 'approved'],
+      ]
+    : [
+        ['ارسال گزارش', rec.round_count > 0],
+        ['ارزیابی استاد', rec.submissions.some(s => s.status !== 'pending')],
+        ['اصلاح و نوبت بعد', rec.submissions.some(s => s.status === 'needs_revision')],
+        ['تأیید نهایی', rec.status === 'approved'],
+      ]
 
   const doReview = async (decision) => {
     if (!review.feedback.trim()) return alert('بازخورد برای دانشجو بنویسید — حتی در تأیید نهایی توصیه می‌شود.')
@@ -283,8 +311,9 @@ export function RecordDetail({ id, onBack, user }) {
         </div>
         <div className="hint" style={{ marginTop: 6 }}>
           {rec.course_fa} · مقطع: {rec.degree_fa} · دانشجو: {rec.student_name} · استاد مربوطه: {rec.supervisor_name}
-          {rec.semester ? ` · ${rec.semester}` : ''} · نوبت‌ها: {toFa(rec.round_count)}
-          {isInternship && <> · گزارش کار: <b>{toFa(rec.report_count)}</b> از حداقل {toFa(rec.min_reports)} ({INTERVAL_FA[rec.report_interval] || 'هفتگی'})</>}
+          {rec.semester ? ` · ${rec.semester}` : ''} · گزارش‌های ثبت‌شده: {toFa(rec.round_count)}
+          {isInternship && rec.accepted_at && <> · زمان‌بندی: <b>{INTERVAL_FA[rec.report_interval] || 'هفتگی'}</b> از {fmtDateTime(rec.accepted_at)}</>}
+          {isInternship && rec.accepted_at && <> · امتیاز تجمعی: <b>{toFa(rec.current_score ?? 0)}</b> از سقف ۲۰</>}
           {rec.final_score != null && <> · <b>نمرهٔ نهایی: {toFa(rec.final_score)}</b> از ۲۰</>}
         </div>
         <div className="status-flow">
@@ -299,49 +328,34 @@ export function RecordDetail({ id, onBack, user }) {
         )}
       </div>
 
-      {isInternship && isSupervisor && rec.status !== 'approved' && rec.status !== 'cancelled'
-        && <ScheduleCard rec={rec} onChanged={load} />}
-      {isInternship && isOwner && rec.status !== 'approved' && rec.status !== 'cancelled'
-        && <WorkReportForm rec={rec} onDone={load} />}
-      {isInternship && <WorkReportsCard rec={rec} isSupervisor={isSupervisor} onChanged={load} />}
+      {/* کارآموزی — پذیرش/زمان‌بندی توسط استاد */}
+      {isInternship && isSupervisor && (rec.status === 'pending_acceptance' || rec.status === 'active')
+        && <AcceptCard rec={rec} onChanged={load} />}
 
-      {/* فرم ارسال نوبت جدید — دانشجو */}
-      {isOwner && rec.status !== 'approved' && rec.status !== 'cancelled' && (
+      {/* کارآموزی — در انتظار پذیرش استاد */}
+      {isInternship && rec.status === 'pending_acceptance' && (
         <div className="card">
-          <h4>📤 ارسال گزارش پیشرفت — نوبت {toFa(rec.round_count + 1)}</h4>
-          {isInternship && !workOk && (
-            <div className="error-box">
-              ⚠️ تأیید نهایی کارآموزی فقط با حداقل {toFa(rec.min_reports)} گزارش کار ممکن است —
-              تاکنون {toFa(rec.report_count)} گزارش ثبت شده؛ ابتدا گزارش‌های کار را کامل کنید.
-            </div>
-          )}
-          <textarea rows={3} placeholder="خلاصهٔ کار انجام‌شده در این نوبت، اصلاحات انجام‌شده طبق بازخورد استاد…"
-                    value={note} onChange={e => setNote(e.target.value)} />
-          <div className="row" style={{ marginTop: 8 }}>
-            <input type="file" id="practicum-files" multiple
-                   onChange={e => setFiles([...(e.target.files || [])])} />
-            <button className="btn" onClick={submit} disabled={busy}>
-              {busy ? 'در حال ارسال…' : 'ارسال برای ارزیابی استاد'}
-            </button>
-          </div>
-          <div className="hint" style={{ marginTop: 6 }}>
-            حداکثر ۵ فایل و هر فایل تا ۱۵ مگابایت (گزارش، پیوست کد، عکس محیط کارآموزی و…).
-            تا ارزیابی استاد، وضعیت «در انتظار ارزیابی» می‌ماند.
+          <h4>⏳ در انتظار پذیرش استاد مربوطه</h4>
+          <div className="hint">
+            پس از پذیرش استاد و تعیین زمان‌بندی (روزانه، هفتگی یا دوهفته‌یکبار)، ارسال گزارش پیشرفت از
+            همان تاریخ آغاز می‌شود. اعلان پذیرش برای شما ارسال خواهد شد.
           </div>
         </div>
       )}
 
-      {/* فرم ارزیابی — استاد مربوطه */}
-      {isSupervisor && openRound && (
+      {/* فرم گزارش پیشرفت — دانشجو */}
+      {isOwner && (rec.status === 'active' || (!isInternship && rec.status !== 'approved' && rec.status !== 'cancelled')) && (
+        <SubmissionForm rec={rec} onDone={load} internship={isInternship} />
+      )}
+
+      {/* تأیید نهایی کارآموزی — استاد */}
+      {isInternship && isSupervisor && rec.status === 'active' && <FinalApproveCard rec={rec} onDone={load} />}
+
+      {/* ارزیابی نوبت — استاد مربوطه (فقط درس‌پروژه/تحقیق و ارائه) */}
+      {!isInternship && isSupervisor && openRound && (
         <div className="card" style={{ borderRight: '4px solid var(--accent)' }}>
           <h4>🧑‍⚖️ ارزیابی نوبت {toFa(openRound.round_no)}</h4>
           <div className="hint">بازخورد شفاف بنویسید؛ برای ادامهٔ کار دانشجو «اصلاح لازم» و برای پایان درس «تأیید نهایی» را بزنید.</div>
-          {isInternship && !workOk && (
-            <div className="error-box">
-              برای تأیید نهایی این کارآموزی، حداقل {toFa(rec.min_reports)} گزارش کار لازم است
-              (تاکنون {toFa(rec.report_count)}) — می‌توانید نوبت را «اصلاح لازم» بزنید تا دانشجو گزارش‌های کار را کامل کند.
-            </div>
-          )}
           <textarea rows={3} placeholder="بازخورد: چه چیز خوب است، چه چیز باید اصلاح شود…"
                     value={review.feedback} onChange={e => setReview({ ...review, feedback: e.target.value })} />
           <div className="row" style={{ marginTop: 8 }}>
@@ -356,17 +370,23 @@ export function RecordDetail({ id, onBack, user }) {
         </div>
       )}
 
-      {/* تایم‌لاین نوبت‌ها */}
+      {/* تایم‌لاین گزارش‌ها */}
       <div className="card">
-        <h4>🕰️ چرخهٔ ارسال و بازخورد ({toFa(rec.submissions.length)} نوبت)</h4>
+        <h4>{isInternship ? `📔 گزارش‌های پیشرفت (${toFa(rec.submissions.length)})` : `🕰️ چرخهٔ ارسال و بازخورد (${toFa(rec.submissions.length)} نوبت)`}</h4>
         <div className="rounds">
           {rec.submissions.map(s => (
             <div key={s.id} className="round-item">
               <div className="round-head">
-                <b>نوبت {toFa(s.round_no)}</b>
-                <span className={`badge ${s.status === 'approved' ? 'green' : s.status === 'needs_revision' ? 'red' : 'amber'}`}>{s.status_fa}</span>
+                <b>{isInternship ? `گزارش پیشرفت ${toFa(s.round_no)}` : `نوبت ${toFa(s.round_no)}`}</b>
+                {isInternship ? (
+                  s.likert_score != null
+                    ? <span className="badge green">امتیاز لیکرت: {toFa(s.likert_score)} از ۴</span>
+                    : <span className="badge amber">در انتظار امتیاز استاد</span>
+                ) : (
+                  <span className={`badge ${s.status === 'approved' ? 'green' : s.status === 'needs_revision' ? 'red' : 'amber'}`}>{s.status_fa}</span>
+                )}
                 <span className="hint">{fmtDateTime(s.created_at)}</span>
-                {s.score != null && <span className="badge teal">نمرهٔ نوبت: {toFa(s.score)}</span>}
+                {!isInternship && s.score != null && <span className="badge teal">نمرهٔ نوبت: {toFa(s.score)}</span>}
               </div>
               {s.note && <div style={{ fontSize: 13.2 }}>{s.note}</div>}
               {s.files.length > 0 && (
@@ -379,18 +399,22 @@ export function RecordDetail({ id, onBack, user }) {
                   ))}
                 </div>
               )}
-              {s.status !== 'pending' && s.feedback && (
+              {s.feedback && (
                 <div className="feedback-box">
-                  <b style={{ color: s.status === 'approved' ? 'var(--success)' : 'var(--warn)' }}>
-                    {s.status === 'approved' ? '✅ بازخورد استاد (تأیید):' : '↩️ بازخورد استاد (اصلاح لازم):'}
+                  <b style={{ color: isInternship || s.status === 'approved' ? 'var(--success)' : 'var(--warn)' }}>
+                    {isInternship ? '💬 بازخورد استاد:' : s.status === 'approved' ? '✅ بازخورد استاد (تأیید):' : '↩️ بازخورد استاد (اصلاح لازم):'}
                   </b> {s.feedback}
-                  {s.supervisor_note && <div className="hint" style={{ marginTop: 4 }}>توضیح تکمیلی: {s.supervisor_note}</div>}
+                  {!isInternship && s.supervisor_note && <div className="hint" style={{ marginTop: 4 }}>توضیح تکمیلی: {s.supervisor_note}</div>}
                   <div className="hint" style={{ marginTop: 2 }}>{fmtDateTime(s.reviewed_at)}</div>
                 </div>
               )}
+              {isInternship && isSupervisor && s.likert_score == null && rec.status === 'active'
+                && <LikertScorer sub={s} rec={rec} onDone={load} />}
             </div>
           ))}
-          {rec.submissions.length === 0 && <div className="empty">هنوز نوبتی ارسال نشده است.</div>}
+          {rec.submissions.length === 0 && (
+            <div className="empty">{isInternship ? 'هنوز گزارش پیشرفتی ثبت نشده است.' : 'هنوز نوبتی ارسال نشده است.'}</div>
+          )}
         </div>
       </div>
     </>

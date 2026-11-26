@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react'
 import { useAuth } from '../auth.jsx'
-import { api, toFa } from '../api.js'
+import { api, toFa, fmtDateTime } from '../api.js'
 import { CreateForm, RecordDetail, STATUS_BADGE, INTERVAL_FA } from './practicumShared.jsx'
 
-/* کارآموزی — صفحهٔ جدا از درس‌پروژه: گزارش کار هفتگی/روزانه طبق زمان‌بندی استاد مربوطه،
-   حداقل ۵ گزارش کار در ترم برای تأیید نهایی */
+/* کارآموزی — صفحهٔ جدا از درس‌پروژه: پس از پذیرش استاد و تعیین زمان‌بندی (روزانه/هفتگی/
+   دوهفته‌یکبار)، دانشجو از لحظهٔ پذیرش گزارش پیشرفت را بدون انتظار تأیید مرحله‌ای می‌فرستد؛
+   استاد هر گزارش را با طیف لیکرت ۰ تا ۴ امتیاز می‌دهد و سرجمع امتیازها (سقف ۲۰) نمرهٔ از ۲۰ است */
 export default function Internship() {
   const { user } = useAuth()
   const [meta, setMeta] = useState(null)
@@ -26,7 +27,7 @@ export default function Internship() {
   return (
     <>
       <div className="card">
-        <h3>🏭 کارآموزی — گزارش کار هفتگی/روزانه</h3>
+        <h3>🏭 کارآموزی — گزارش پیشرفت با طیف لیکرت</h3>
         {meta?.my_degree ? (
           <div className="demo-banner">
             <b>🎓 مقطع شما: {meta.degree_fa}</b>
@@ -38,12 +39,12 @@ export default function Internship() {
           <div className="error-box">مقطع تحصیلی در پروفایل شما ثبت نشده — از «پروفایل پژوهشی» مقطع را انتخاب کنید.</div>
         )}
         <div className="hint" style={{ marginTop: 8 }}>
-          {meta?.internship_guidance || 'در کارآموزی، زمان‌بندی گزارش کار (روزانه یا هفتگی) را استاد مربوطه تعیین می‌کند؛ برای تأیید نهایی، حداقل ۵ گزارش کار در ترم لازم است.'}
+          {meta?.internship_guidance || 'پس از ثبت کارآموزی، استاد مربوطه پذیرش و زمان‌بندی گزارش پیشرفت را تعیین می‌کند (روزانه، هفتگی یا دوهفته‌یکبار) و از لحظهٔ پذیرش، دانشجو طبق برنامه گزارش می‌فرستد. امتیاز هر گزارش ۰ تا ۴ است و سرجمع امتیازها (سقف ۲۰) نمرهٔ کارآموزی از ۲۰ می‌شود. حداقل ۵ گزارش پیشرفت در ترم لازم است.'}
         </div>
       </div>
 
       {isStudent && internshipAllowed && <CreateForm meta={meta} onDone={load} onlyType="internship" title="➕ ثبت کارآموزی جدید" />}
-      {!isStudent && <div className="card"><h4>📥 کارآموزی‌های {isManager ? 'همهٔ دانشجویان' : 'تحت ارزیابی من'} ({toFa(records.length)})</h4></div>}
+      {!isStudent && <div className="card"><h4>📥 کارآموزی‌های {isManager ? 'همهٔ دانشجویان' : 'تحت ارزیابی من'} ({toFa(records.length)}) — <a href="#/internship-dashboard" className="lnk">📊 گزارش کارآموزی‌ها</a></h4></div>}
 
       <div className="grid cols-2">
         {records.map(r => (
@@ -56,16 +57,25 @@ export default function Internship() {
               {isStudent ? `استاد مربوطه: ${r.supervisor_name}` : `دانشجو: ${r.student_name}`}
               {r.semester ? ` · ${r.semester}` : ''}
             </div>
-            <div className="hint">
-              زمان‌بندی گزارش کار: <b>{INTERVAL_FA[r.report_interval] || 'هفتگی'}</b> ·
-              گزارش‌های کار: <b>{toFa(r.report_count)}</b> از حداقل {toFa(r.min_reports)}
-              {(r.report_count || 0) >= (r.min_reports || 5)
-                ? ' ✓ شرط حداقل گزارش کامل است'
-                : ' — شرط حداقل گزارش هنوز کامل نشده'}
-            </div>
-            <div className="hint">نوبت‌های گزارش پیشرفت: {toFa(r.round_count)} {r.final_score != null && `· نمرهٔ نهایی: ${toFa(r.final_score)}`}</div>
+            {r.status === 'pending_acceptance' ? (
+              <div className="hint">در انتظار پذیرش و تعیین زمان‌بندی توسط استاد مربوطه.</div>
+            ) : (
+              <>
+                <div className="hint">
+                  زمان‌بندی گزارش پیشرفت: <b>{INTERVAL_FA[r.report_interval] || 'هفتگی'}</b>
+                  {r.accepted_at ? <> (از {fmtDateTime(r.accepted_at)})</> : null} ·
+                  گزارش‌ها: <b>{toFa(r.round_count)}</b> از حداقل {toFa(r.min_reports || 5)}
+                  {(r.round_count || 0) >= (r.min_reports || 5) ? ' ✓ شرط حداقل کامل است' : ''}
+                </div>
+                <div className="hint">
+                  امتیاز تجمعی لیکرت: <b>{toFa(r.current_score ?? 0)}</b> از سقف ۲۰
+                  {(r.unscored_count || 0) > 0 && <> · {toFa(r.unscored_count)} گزارش در انتظار امتیاز استاد</>}
+                </div>
+              </>
+            )}
+            {r.final_score != null && <div className="hint">نمرهٔ نهایی کارآموزی: <b>{toFa(r.final_score)}</b> از ۲۰</div>}
             <div className="row" style={{ gap: 6, marginTop: 8 }}>
-              <button className="btn small" onClick={() => setOpenId(r.id)}>نمایش گزارش‌های کار و چرخهٔ ارزیابی</button>
+              <button className="btn small" onClick={() => setOpenId(r.id)}>نمایش گزارش‌ها و امتیازها</button>
             </div>
           </div>
         ))}

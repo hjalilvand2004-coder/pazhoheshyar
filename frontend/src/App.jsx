@@ -17,6 +17,7 @@ import Research from './pages/Research.jsx'
 import Lab from './pages/Lab.jsx'
 import Practicum from './pages/Practicum.jsx'
 import Internship from './pages/Internship.jsx'
+import InternshipDashboard from './pages/InternshipDashboard.jsx'
 import AiAssistant from './pages/AiAssistant.jsx'
 import Semantic from './pages/Semantic.jsx'
 import Admin from './pages/Admin.jsx'
@@ -49,6 +50,7 @@ export default function App() {
         <Route path="/lab" element={<Protected><Lab /></Protected>} />
         <Route path="/practicum" element={<Protected><Practicum /></Protected>} />
         <Route path="/internship" element={<Protected><Internship /></Protected>} />
+        <Route path="/internship-dashboard" element={<Protected><InternshipDashboard /></Protected>} />
         <Route path="/ai" element={<Protected><AiAssistant /></Protected>} />
         <Route path="/semantic" element={<Protected><Semantic /></Protected>} />
         <Route path="/admin" element={<Protected><Admin /></Protected>} />
