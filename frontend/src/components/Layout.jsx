@@ -61,7 +61,8 @@ const MENUS = [
   { to: '/chat', label: 'گفت‌وگوها', ic: '💬', roles: ['student', 'professor'] },
   { to: '/projects', label: 'پروژه‌های من', ic: '🗂️', roles: ['student', 'professor', 'research_manager', 'system_admin'] },
   { to: '/research', label: 'فضای پژوهش', ic: '📝', roles: ['student', 'professor', 'research_manager', 'system_admin'] },
-  { to: '/practicum', label: 'کارآموزی و درس‌پروژه', ic: '🛠️', adaptive: true, roles: ['student', 'professor', 'research_manager', 'system_admin'] },
+  { to: '/internship', label: 'کارآموزی', ic: '🏭', adaptive: true, roles: ['student', 'professor', 'research_manager', 'system_admin'] },
+  { to: '/practicum', label: 'درس‌پروژه و تحقیق و ارائه', ic: '🛠️', adaptive: true, roles: ['student', 'professor', 'research_manager', 'system_admin'] },
   { to: '/lab', label: 'آزمایشگاه شبیه‌سازی', ic: '🧪', roles: ['student', 'professor', 'research_manager', 'system_admin'] },
   { to: '/ai', label: 'دستیار هوشمند', ic: '🤖', roles: ['student', 'professor', 'research_manager'] },
   { to: '/semantic', label: 'شبکهٔ دانش', ic: '🕸️', roles: ['student', 'professor', 'research_manager', 'system_admin'] },
@@ -70,17 +71,20 @@ const MENUS = [
   { to: '/profile', label: 'پروفایل پژوهشی', ic: '👤', roles: ['student', 'professor', 'research_manager', 'system_admin'] },
 ]
 
-/* برچسب منوی درس‌های عملی نسبت به مقطع تحصیلی — نمایش مقطع‌محور */
-function practicumLabel(user) {
+/* برچسب منوی درس‌های عملی نسبت به مقطع و نقش — دو صفحهٔ جدا: کارآموزی / درس‌پروژه و تحقیق و ارائه */
+function internshipLabel(user) {
   const roles = user?.roles || []
-  if (roles.includes('professor')) return 'ارزیابی کارآموزی و درس‌پروژه'
-  if (roles.includes('research_manager') || roles.includes('system_admin')) return 'درس‌های عملی دانشجویان'
-  switch (user?.degree_key) {
-    case 'master': return 'تحقیق و ارائه'
-    case 'associate':
-    case 'bachelor': return 'کارآموزی و درس‌پروژه'
-    default: return 'کارآموزی و درس‌پروژه'
-  }
+  if (roles.includes('professor')) return 'ارزیابی کارآموزی'
+  if (roles.includes('research_manager') || roles.includes('system_admin')) return 'کارآموزی دانشجویان'
+  return 'کارآموزی'
+}
+
+function projectLabel(user) {
+  const roles = user?.roles || []
+  if (roles.includes('professor')) return 'ارزیابی درس‌پروژه و تحقیق'
+  if (roles.includes('research_manager') || roles.includes('system_admin')) return 'درس‌پروژه و تحقیق دانشجویان'
+  if (user?.degree_key === 'master') return 'تحقیق و ارائه'
+  return 'درس‌پروژه'
 }
 
 function ThemeToggle() {
@@ -114,7 +118,8 @@ export default function Layout({ children }) {
         </div>
         <div className="nav-cap">منوی اصلی</div>
         {MENUS
-          .map(m => (m.adaptive ? { ...m, label: practicumLabel(user) } : m))
+          .map(m => (m.to === '/internship' ? { ...m, label: internshipLabel(user) }
+            : m.to === '/practicum' ? { ...m, label: projectLabel(user) } : m))
           .filter(m => m.roles.some(r => (user.roles || []).includes(r)))
           .map(m => (
             <NavLink key={m.to} to={m.to} end={m.end} className={({ isActive }) => (isActive ? 'active' : '')}>

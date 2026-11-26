@@ -50,6 +50,13 @@ TOKEN_TTL_HOURS = int(os.environ.get("TOKEN_TTL_HOURS", "12"))
 # توکن سرویس‌به‌سرویس برای سامانه‌های دیگر اکوسیستم دانشجو۳۶۰ (اختیاری)
 SERVICE_TOKEN = os.environ.get("SERVICE_TOKEN", "")
 
+# دستیار هوشمند ویجت — اگر نقطهٔ پایانی LLM سازگار با OpenAI تنظیم شود (مثل سرویس GLM)،
+# پاسخ‌ها با مدل زبانی + کانتکست واقعی دانشجو تولید می‌شود؛ بدون تنظیم، پاسخ‌ساز قاعده‌محور کار می‌کند.
+LLM_API_URL = os.environ.get("LLM_API_URL", "")          # مثال: https://api.z.ai/api/paas/v4/chat/completions
+LLM_API_KEY = os.environ.get("LLM_API_KEY", "")
+LLM_MODEL = os.environ.get("LLM_MODEL", "glm-4-flash")
+LLM_TIMEOUT_SECONDS = float(os.environ.get("LLM_TIMEOUT_SECONDS", "25"))
+
 # محدودیت‌های ضداسپم
 REQUEST_DAILY_LIMIT = int(os.environ.get("REQUEST_DAILY_LIMIT", "10"))
 MESSAGE_HOURLY_LIMIT = int(os.environ.get("MESSAGE_HOURLY_LIMIT", "60"))

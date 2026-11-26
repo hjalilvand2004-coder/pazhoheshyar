@@ -562,6 +562,10 @@ class PracticumRecord(Base):
     semester = Column(String(60), default="")                 # مثلاً نیم‌سال اول ۱۴۰۴-۱۴۰۵
     status = Column(String(20), default="active", index=True)  # active | awaiting_review | needs_revision | approved | cancelled
     round_count = Column(Integer, default=0)                  # تعداد نوبت‌های ارسال تاکنون
+    # ویژهٔ کارآموزی: زمان‌بندی گزارش کار با نظر استاد مربوطه (روزانه یا هفتگی) و حداقل گزارش ترم
+    report_interval = Column(String(20), default="weekly")    # daily | weekly
+    min_reports = Column(Integer, default=5)                  # حداقل گزارش کار لازم برای تأیید نهایی کارآموزی
+    report_count = Column(Integer, default=0)                 # تعداد گزارش کار ثبت‌شده تاکنون
     final_score = Column(Float, nullable=True)                # نمرهٔ نهایی (۰ تا ۲۰) هنگام تأیید
     supervisor_note = Column(Text, default="")                # جمع‌بندی استاد هنگام تأیید
     approved_at = Column(DateTime(timezone=True), nullable=True)
@@ -581,6 +585,26 @@ class PracticumSubmission(Base):
     feedback = Column(Text, default="")                       # بازخورد استاد
     supervisor_note = Column(Text, default="")                # توضیح تکمیلی استاد
     score = Column(Float, nullable=True)                      # نمرهٔ این نوبت (اختیاری)
+    reviewer_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=now_utc)
+
+
+class PracticumWorkReport(Base):
+    """گزارش کار کارآموزی (هفتگی یا روزانه بسته به زمان‌بندی استاد مربوطه).
+
+    از نوبت‌های «گزارش پیشرفت» جدا است: گزارش کار روند کاری مستمر در محل کارآموزی را ثبت
+    می‌کند و در پایان، حداقلِ تعداد آن (پیش‌فرض ۵ در ترم) شرط تأیید نهایی کارآموزی است.
+    """
+    __tablename__ = "practicum_work_reports"
+    id = Column(Integer, primary_key=True)
+    record_id = Column(Integer, ForeignKey("practicum_records.id"), nullable=False, index=True)
+    report_no = Column(Integer, nullable=False)               # شماره گزارش کار (۱، ۲، …)
+    title = Column(String(300), default="")                   # مثلاً «گزارش هفتهٔ اول — آشنایی با محیط کار»
+    content = Column(Text, default="")                        # شرح کار انجام‌شده
+    hours = Column(Float, nullable=True)                      # ساعت کارکرد اختیاری
+    status = Column(String(20), default="pending", index=True)  # pending | approved | needs_revision
+    feedback = Column(Text, default="")                       # بازخورد استاد مربوطه
     reviewer_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     reviewed_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=now_utc)

@@ -28,6 +28,7 @@ app.add_middleware(
 
 from .services.agreements import router as agreements_router  # noqa: E402
 from .services.ai import router as ai_router                  # noqa: E402
+from .services.assistant import router as assistant_router    # noqa: E402
 from .services.admin import router as admin_router            # noqa: E402
 from .services.auth import router as auth_router              # noqa: E402
 from .services.conversations import router as conv_router     # noqa: E402
@@ -58,6 +59,7 @@ app.include_router(files_router)
 app.include_router(notif_router)
 app.include_router(events_router)
 app.include_router(ai_router)
+app.include_router(assistant_router)
 app.include_router(admin_router)
 app.include_router(research_router)
 app.include_router(research_ai_router)
@@ -71,6 +73,7 @@ app.include_router(semantic_router)
 def startup():
     init_db()
     _migrate_sso_columns()
+    _migrate_practicum_columns()
     _upgrade_placeholder_sso()
     if os.environ.get("SEED_ON_START", "1") == "1":
         db = SessionLocal()
@@ -114,6 +117,26 @@ def _migrate_sso_columns():
                 for name, ddl in new_cols:
                     if name not in existing:
                         conn.execute(text(f"ALTER TABLE sso_settings ADD COLUMN {name} {ddl}"))
+    except Exception:
+        pass  # دیتابیس تازه ساخته می‌شود / موتور غیر SQLite — create_all ستون‌ها را دارد
+
+
+def _migrate_practicum_columns():
+    """افزودن ستون‌های زمان‌بندی گزارش کار کارآموزی به دیتابیس‌های قدیمی‌تر (بدون از دست رفتن داده)."""
+    from sqlalchemy import text
+    from .core.database import engine
+    new_cols = [
+        ("report_interval", "VARCHAR(20) DEFAULT 'weekly' NOT NULL"),
+        ("min_reports", "INTEGER DEFAULT 5 NOT NULL"),
+        ("report_count", "INTEGER DEFAULT 0 NOT NULL"),
+    ]
+    try:
+        with engine.begin() as conn:
+            existing = {row[1] for row in conn.execute(text("PRAGMA table_info(practicum_records)"))}
+            if existing:  # جدول موجود است
+                for name, ddl in new_cols:
+                    if name not in existing:
+                        conn.execute(text(f"ALTER TABLE practicum_records ADD COLUMN {name} {ddl}"))
     except Exception:
         pass  # دیتابیس تازه ساخته می‌شود / موتور غیر SQLite — create_all ستون‌ها را دارد
 
